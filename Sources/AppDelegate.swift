@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
   private var frameObservation: Any?
   private var activeObservation: Any?
   private var signalSource: DispatchSourceSignal?
+  private let settings = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")!
 
   // Persisted settings (read from UserDefaults)
   private var dockSide: String = "left"
@@ -41,10 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
   // MARK: - Settings
 
   private func loadSettings() {
-    let defaults = UserDefaults.standard
-    defaults.synchronize()
-    dockSide = defaults.string(forKey: "dockSide") ?? "left"
-    alwaysOnTop = defaults.bool(forKey: "alwaysOnTop")
+    settings.synchronize()
+    dockSide = settings.string(forKey: "dockSide") ?? "left"
+    alwaysOnTop = settings.bool(forKey: "alwaysOnTop")
   }
 
   private func applySettings() {
