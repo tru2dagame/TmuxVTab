@@ -20,6 +20,7 @@ jobs:
         run: |
           swift build -c release --arch ${{ matrix.arch }}
           cp .build/release/TmuxVTab TmuxVTab-darwin-${{ matrix.arch }}
+          codesign -s - --force TmuxVTab-darwin-${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v5
         with:
@@ -42,7 +43,8 @@ jobs:
             artifacts/TmuxVTab-darwin-arm64/TmuxVTab-darwin-arm64 \
             artifacts/TmuxVTab-darwin-x86_64/TmuxVTab-darwin-x86_64 \
             -output TmuxVTab-darwin-universal
-          chmod +x TmuxVTab-darwin-universal TmuxVTab-darwin-arm64/TmuxVTab-darwin-arm64 TmuxVTab-darwin-x86_64/TmuxVTab-darwin-x86_64 2>/dev/null || true
+          chmod +x TmuxVTab-darwin-universal
+          codesign -s - --force TmuxVTab-darwin-universal
 
       - name: Create release
         env:
