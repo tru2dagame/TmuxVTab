@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# tmuxvtab — wrapper script to manage the TmuxVTab macOS companion app
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO="tru2dagame/tmuxvtab"
+BINARY="$PROJECT_DIR/.build/release/TmuxVTab"
+PIDFILE="${TMPDIR:-/tmp}/tmuxvtab.pid"
+LOGFILE="${TMPDIR:-/tmp}/tmuxvtab.log"
+BUNDLE_ID="app.tru2dagame.tmuxvtab"
+
+_arch() {
+  case "$(uname -m)" in
+    arm64)  echo "arm64"   ;;
+    x86_64) echo "x86_64"  ;;
+    *)      echo "universal" ;;
+  esac
+}
+
+_download() {
+  local arch asset url
+  arch=$(_arch)
+  asset="TmuxVTab-darwin-${arch}"
+
+  echo "Downloading ${asset} from GitHub Releases..."
+
+  # Try gh CLI first (handles auth), fall back to curl
+  if command -v gh &>/dev/null; then
+    if gh release download --repo "$REPO" --pattern "$asset" --dir "$PROJECT_DIR/.build/release" --clobber 2>/dev/null; then
+      mv "$PROJECT_DIR/.build/release/$asset" "$BINARY"
+      chmod +x "$BINARY"
+      echo "Downloaded (gh)."
+      return 0
+    fi
+  fi
+
+  # Fallback: curl from latest release
+  url="https://github.com/${REPO}/releases/latest/download/${asset}"
+  if curl -fsSL -o "$BINARY" "$url" 2>/dev/null; then
+    chmod +x "$BINARY"
+    echo "Downloaded (curl)."
+    return 0
+  fi
+
+  echo "Download failed." >&2
+  return 1
+}
+
+_ensure_build_dir() {
+  mkdir -p "$PROJECT_DIR/.build/release"
+}
+
+_has_source() {
+  [[ -f "$PROJECT_DIR/Package.swift" ]]
+}
+
+_need_build() {
+  [[ ! -x "$BINARY" ]] && return 0
+  # Only check source freshness if source exists (dev mode)
+  if _has_source; then
+    local newer
+    newer=$(find "$PROJECT_DIR/Sources" "$PROJECT_DIR/Package.swift" -newer "$BINARY" 2>/dev/null | head -1)
+    [[ -n "$newer" ]] && return 0
+  fi
+  return 1
+}
+
+_build() {
+  echo "Building TmuxVTab..."
+  (cd "$PROJECT_DIR" && swift build -c release --quiet) || {
+    echo "Build failed." >&2
+    exit 1
+  }
+  echo "Build complete."
+}
+
+# Ensure binary exists: download from release, or build from source
+_ensure_binary() {
+  if ! _need_build; then
+    return 0
+  fi
+
+  _ensure_build_dir
+
+  # Try downloading pre-built binary first
+  if _download; then
+    return 0
+  fi
+
+  # Fall back to building from source
+  if _has_source && command -v swift &>/dev/null; then
+    _build
+    return 0
+  fi
+
+  echo "Error: No binary, no release to download, and no Swift toolchain to build." >&2
+  exit 1
+}
+
+_is_running() {
+  [[ -f "$PIDFILE" ]] || return 1
+  local pid
+  pid=$(cat "$PIDFILE")
+  # Check process exists AND is actually TmuxVTab (not a recycled PID)
+  kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o comm= 2>/dev/null | grep -q TmuxVTab
+}
+
+_start() {
+  if _is_running; then
+    echo "TmuxVTab is already running (pid $(cat "$PIDFILE"))"
+    return 0
+  fi
+
+  _ensure_binary
+
+  nohup "$BINARY" > "$LOGFILE" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$PIDFILE"
+  echo "TmuxVTab started (pid $pid)"
+}
+
+_stop() {
+  if ! _is_running; then
+    echo "TmuxVTab is not running."
+    rm -f "$PIDFILE"
+    return 0
+  fi
+  local pid
+  pid=$(cat "$PIDFILE")
+  kill "$pid" 2>/dev/null
+  rm -f "$PIDFILE"
+  echo "TmuxVTab stopped (pid $pid)"
+}
+
+_status() {
+  if _is_running; then
+    echo "TmuxVTab is running (pid $(cat "$PIDFILE"))"
+  else
+    echo "TmuxVTab is not running."
+    rm -f "$PIDFILE"
+  fi
+}
+
+# Write a setting and signal the running process to reload
+_set_and_signal() {
+  local key="$1" type="$2" value="$3"
+  defaults write "$BUNDLE_ID" "$key" "-${type}" "$value"
+  _is_running && kill -USR1 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+_usage() {
+  cat <<EOF
+Usage: tmuxvtab <command>
+
+Commands:
+  start     Download/build (if needed) and start TmuxVTab in background
+  stop      Stop TmuxVTab
+  restart   Restart TmuxVTab (or start if not running)
+  status    Check if TmuxVTab is running
+  left      Dock to left of Ghostty (default, persisted)
+  right     Dock to right of Ghostty (persisted)
+  pin       Always stay on top
+  unpin     Follow Ghostty focus (default)
+  build     Build from source
+  download  Download pre-built binary from GitHub Releases
+  log       Tail the log file
+
+Without arguments, starts TmuxVTab (same as 'start').
+EOF
+}
+
+case "${1:-start}" in
+  start)    _start   ;;
+  stop)     _stop    ;;
+  restart)  _is_running && { _stop; sleep 0.5; }; _start ;;
+  status)   _status  ;;
+  left)     _set_and_signal dockSide string left   ;;
+  right)    _set_and_signal dockSide string right  ;;
+  pin)      _set_and_signal alwaysOnTop bool true   ;;
+  unpin)    _set_and_signal alwaysOnTop bool false  ;;
+  build)    _build   ;;
+  download) _ensure_build_dir; _download ;;
+  log)      tail -f "$LOGFILE" ;;
+  -h|--help|help) _usage ;;
+  *)
+    echo "Unknown command: $1" >&2
+    _usage >&2
+    exit 1
+    ;;
+esac
