@@ -4,6 +4,14 @@ struct SidebarContentView: View {
   @State var tmuxService: TmuxService
   @State var ghosttyMonitor: GhosttyMonitor
   @AppStorage("fontScale") private var fontScale: Double = 1.0
+  private let settings = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")!
+
+  private var dockSide: String {
+    settings.string(forKey: "dockSide") ?? "left"
+  }
+  private var alwaysOnTop: Bool {
+    settings.bool(forKey: "alwaysOnTop")
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -23,10 +31,49 @@ struct SidebarContentView: View {
     .background(.ultraThinMaterial)
     .preferredColorScheme(.dark)
     .contextMenu {
-      Button("Larger Font") { fontScale = min(fontScale + 0.1, 2.0) }
-      Button("Smaller Font") { fontScale = max(fontScale - 0.1, 0.6) }
-      Button("Reset Font Size") { fontScale = 1.0 }
+      Menu("Font Size") {
+        Button("Larger") { fontScale = min(fontScale + 0.1, 2.0) }
+        Button("Smaller") { fontScale = max(fontScale - 0.1, 0.6) }
+        Button("Reset") { fontScale = 1.0 }
+      }
+
+      Divider()
+
+      Menu("Dock Side") {
+        Button {
+          setSetting("dockSide", string: "left")
+        } label: {
+          if dockSide == "left" { Text("Left  \u{2713}") } else { Text("Left") }
+        }
+        Button {
+          setSetting("dockSide", string: "right")
+        } label: {
+          if dockSide == "right" { Text("Right  \u{2713}") } else { Text("Right") }
+        }
+      }
+
+      Button(alwaysOnTop ? "Unpin (Follow Focus)" : "Pin (Always on Top)") {
+        setSetting("alwaysOnTop", bool: !alwaysOnTop)
+      }
+
+      Divider()
+
+      Button("Quit") {
+        NSApp.terminate(nil)
+      }
     }
+  }
+
+  // MARK: - Settings Helpers
+
+  private func setSetting(_ key: String, string value: String) {
+    settings.set(value, forKey: key)
+    kill(getpid(), SIGUSR1)
+  }
+
+  private func setSetting(_ key: String, bool value: Bool) {
+    settings.set(value, forKey: key)
+    kill(getpid(), SIGUSR1)
   }
 
   // MARK: - Session List
