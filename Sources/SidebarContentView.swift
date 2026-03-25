@@ -4,14 +4,9 @@ struct SidebarContentView: View {
   @State var tmuxService: TmuxService
   @State var ghosttyMonitor: GhosttyMonitor
   @AppStorage("fontScale") private var fontScale: Double = 1.0
+  @State private var dockSide: String = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")?.string(forKey: "dockSide") ?? "left"
+  @State private var alwaysOnTop: Bool = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")?.bool(forKey: "alwaysOnTop") ?? false
   private let settings = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")!
-
-  private var dockSide: String {
-    settings.string(forKey: "dockSide") ?? "left"
-  }
-  private var alwaysOnTop: Bool {
-    settings.bool(forKey: "alwaysOnTop")
-  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -68,11 +63,13 @@ struct SidebarContentView: View {
 
   private func setSetting(_ key: String, string value: String) {
     settings.set(value, forKey: key)
+    if key == "dockSide" { dockSide = value }
     kill(getpid(), SIGUSR1)
   }
 
   private func setSetting(_ key: String, bool value: Bool) {
     settings.set(value, forKey: key)
+    if key == "alwaysOnTop" { alwaysOnTop = value }
     kill(getpid(), SIGUSR1)
   }
 
