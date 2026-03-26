@@ -48,6 +48,11 @@ struct SessionSectionView: View {
         .transition(.opacity.combined(with: .move(edge: .top)))
       }
     }
-    .padding(.bottom, 4)
+    .padding(.vertical, 4)
+    .background(
+      session.isAttached
+        ? RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06))
+        : nil
+    )
   }
 }

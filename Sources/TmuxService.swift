@@ -92,7 +92,7 @@ final class TmuxService {
   private func fetchSessions(tmuxPath: String) async throws -> [TmuxSession] {
     let sessionOutput = try await run(
       tmuxPath,
-      arguments: ["list-sessions", "-F", "#{session_name}\t#{session_windows}"]
+      arguments: ["list-sessions", "-F", "#{session_name}\t#{session_windows}\t#{session_attached}"]
     )
     let trimmed = sessionOutput.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return [] }
@@ -103,9 +103,10 @@ final class TmuxService {
       guard let nameSubstring = parts.first else { continue }
       let name = String(nameSubstring)
       let windowCount = parts.count > 1 ? Int(String(parts[1])) ?? 0 : 0
+      let isAttached = parts.count > 2 && String(parts[2]) != "0"
 
       let windows = try await fetchWindows(tmuxPath: tmuxPath, sessionName: name)
-      results.append(TmuxSession(name: name, windows: windows, windowCount: windowCount))
+      results.append(TmuxSession(name: name, windows: windows, windowCount: windowCount, isAttached: isAttached))
     }
     return results
   }

@@ -5,12 +5,14 @@ struct TmuxSession: Identifiable, Hashable, Sendable {
   let name: String
   var windows: [TmuxWindow]
   let windowCount: Int
+  let isAttached: Bool
 
-  init(name: String, windows: [TmuxWindow] = [], windowCount: Int = 0) {
+  init(name: String, windows: [TmuxWindow] = [], windowCount: Int = 0, isAttached: Bool = false) {
     self.id = name
     self.name = name
     self.windows = windows
     self.windowCount = windowCount
+    self.isAttached = isAttached
   }
 }
 
