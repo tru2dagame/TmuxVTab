@@ -23,7 +23,7 @@ struct SidebarContentView: View {
       footer
     }
     .environment(\.sidebarFontScale, fontScale)
-    .background(Color.black.opacity(0.50))
+    .background(Color.black.opacity(0.88))
     .background(.ultraThinMaterial)
     .preferredColorScheme(.dark)
     .contextMenu {

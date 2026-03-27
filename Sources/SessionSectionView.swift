@@ -51,7 +51,7 @@ struct SessionSectionView: View {
     .padding(.vertical, 4)
     .background(
       session.isAttached
-        ? RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.18))
+        ? RoundedRectangle(cornerRadius: 18).fill(.white.opacity(0.15))
         : nil
     )
   }
