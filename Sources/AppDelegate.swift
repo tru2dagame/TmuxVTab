@@ -9,12 +9,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
   private var runningObservation: Any?
   private var frameObservation: Any?
   private var activeObservation: Any?
+  private var fullscreenObservation: Any?
   private var signalSource: DispatchSourceSignal?
   private let settings = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")!
 
   // Persisted settings (read from UserDefaults)
   private var dockSide: String = "left"
   private var alwaysOnTop: Bool = false
+  private var floatMode: Bool = false
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     loadSettings()
@@ -24,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
     observeGhosttyState()
     observeGhosttyFrame()
     observeGhosttyActive()
+    observeGhosttyFullscreen()
 
     if ghosttyMonitor.isGhosttyRunning {
       showPanel()
@@ -45,11 +48,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
     settings.synchronize()
     dockSide = settings.string(forKey: "dockSide") ?? "left"
     alwaysOnTop = settings.bool(forKey: "alwaysOnTop")
+    floatMode = settings.bool(forKey: "floatMode")
   }
 
   private func applySettings() {
     loadSettings()
-    snapToGhostty()
+    if shouldFloat {
+      panel?.isMovableByWindowBackground = true
+    } else {
+      panel?.isMovableByWindowBackground = false
+      snapToGhostty()
+    }
     updatePanelLevel()
   }
 
@@ -83,7 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
   }
 
   private func showPanel() {
-    snapToGhostty()
+    if !shouldFloat {
+      snapToGhostty()
+    }
     updatePanelLevel()
     panel?.showPanel()
     tmuxService.startPolling()
@@ -94,17 +105,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
     tmuxService.stopPolling()
   }
 
-  // MARK: - Snap to Ghostty
+  // MARK: - Positioning
 
+  /// Whether the panel should float freely (not track Ghostty).
+  private var shouldFloat: Bool {
+    floatMode || ghosttyMonitor.isGhosttyFullscreen
+  }
+
+  /// Dock mode: snap panel outside Ghostty's edge, tracking its position.
   private func snapToGhostty() {
+    // In float mode, don't follow Ghostty
+    guard !shouldFloat else { return }
     guard let panel, let ghosttyFrame = ghosttyMonitor.ghosttyWindowFrame else { return }
 
     let panelWidth = panel.frame.width
-    let x: CGFloat = if dockSide == "right" {
-      ghosttyFrame.maxX
-    } else {
-      ghosttyFrame.minX - panelWidth
-    }
+    let x: CGFloat = dockSide == "right"
+      ? ghosttyFrame.maxX
+      : ghosttyFrame.minX - panelWidth
     let newFrame = NSRect(
       x: x,
       y: ghosttyFrame.minY,
@@ -115,6 +132,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
     if panel.frame != newFrame {
       panel.setFrame(newFrame, display: true, animate: false)
     }
+  }
+
+  /// Float mode: position panel on the right side of the screen, full height.
+  private func positionFloatPanel() {
+    guard let panel else { return }
+    let screen = NSScreen.main ?? NSScreen.screens.first
+    guard let screenFrame = screen?.visibleFrame else { return }
+
+    let panelWidth = panel.frame.width
+    let newFrame = NSRect(
+      x: screenFrame.maxX - panelWidth,
+      y: screenFrame.minY,
+      width: panelWidth,
+      height: screenFrame.height
+    )
+    panel.setFrame(newFrame, display: true, animate: false)
   }
 
   private func updatePanelLevel() {
@@ -164,6 +197,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
         guard let self else { return }
         self.updatePanelLevel()
         self.observeGhosttyActive()
+      }
+    }
+  }
+
+  private func observeGhosttyFullscreen() {
+    fullscreenObservation = withObservationTracking {
+      _ = ghosttyMonitor.isGhosttyFullscreen
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        if self.ghosttyMonitor.isGhosttyFullscreen {
+          self.panel?.isMovableByWindowBackground = true
+          self.positionFloatPanel()
+        } else {
+          // Exiting fullscreen → always restore dock mode
+          self.floatMode = false
+          self.settings.set(false, forKey: "floatMode")
+          self.panel?.isMovableByWindowBackground = false
+          self.snapToGhostty()
+        }
+        self.updatePanelLevel()
+        self.observeGhosttyFullscreen()
       }
     }
   }

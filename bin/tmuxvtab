@@ -162,6 +162,8 @@ Commands:
   right     Dock to right of Ghostty (persisted)
   pin       Always stay on top
   unpin     Follow Ghostty focus (default)
+  float     Overlay on Ghostty edge (for fullscreen use)
+  dock      Snap outside Ghostty edge (default)
   build     Build from source
   download  Download pre-built binary from GitHub Releases
   log       Tail the log file
@@ -179,6 +181,8 @@ case "${1:-start}" in
   right)    _set_and_signal dockSide string right  ;;
   pin)      _set_and_signal alwaysOnTop bool true   ;;
   unpin)    _set_and_signal alwaysOnTop bool false  ;;
+  float)    _set_and_signal floatMode bool true     ;;
+  dock)     _set_and_signal floatMode bool false    ;;
   build)    _build   ;;
   download) _ensure_build_dir; _download ;;
   log)      tail -f "$LOGFILE" ;;

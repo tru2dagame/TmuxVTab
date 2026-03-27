@@ -6,6 +6,7 @@ private let ghosttyBundleID = "com.mitchellh.ghostty"
 final class GhosttyMonitor {
   var isGhosttyRunning = false
   var isGhosttyActive = false
+  var isGhosttyFullscreen = false
   /// Ghostty's main window frame in NS coordinates (origin bottom-left).
   var ghosttyWindowFrame: NSRect?
 
@@ -119,6 +120,14 @@ final class GhosttyMonitor {
 
       if ghosttyWindowFrame != newFrame {
         ghosttyWindowFrame = newFrame
+      }
+
+      // Detect fullscreen: window covers entire screen
+      let fullscreen = NSScreen.screens.contains { screen in
+        abs(width - screen.frame.width) < 2 && abs(height - screen.frame.height) < 2
+      }
+      if isGhosttyFullscreen != fullscreen {
+        isGhosttyFullscreen = fullscreen
       }
       return
     }

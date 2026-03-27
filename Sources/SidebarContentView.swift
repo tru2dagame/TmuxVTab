@@ -6,6 +6,7 @@ struct SidebarContentView: View {
   @AppStorage("fontScale") private var fontScale: Double = 1.0
   @State private var dockSide: String = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")?.string(forKey: "dockSide") ?? "left"
   @State private var alwaysOnTop: Bool = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")?.bool(forKey: "alwaysOnTop") ?? false
+  @State private var floatMode: Bool = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")?.bool(forKey: "floatMode") ?? false
   private let settings = UserDefaults(suiteName: "app.tru2dagame.tmuxvtab")!
 
   var body: some View {
@@ -52,6 +53,10 @@ struct SidebarContentView: View {
         setSetting("alwaysOnTop", bool: !alwaysOnTop)
       }
 
+      Button(floatMode ? "Dock (Snap to Ghostty)" : "Float (Free Position)") {
+        setSetting("floatMode", bool: !floatMode)
+      }
+
       Divider()
 
       Button("Quit") {
@@ -71,6 +76,7 @@ struct SidebarContentView: View {
   private func setSetting(_ key: String, bool value: Bool) {
     settings.set(value, forKey: key)
     if key == "alwaysOnTop" { alwaysOnTop = value }
+    if key == "floatMode" { floatMode = value }
     kill(getpid(), SIGUSR1)
   }
 
