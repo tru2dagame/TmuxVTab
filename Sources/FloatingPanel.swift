@@ -17,7 +17,7 @@ final class FloatingPanel: NSPanel {
     titleVisibility = .hidden
     titlebarAppearsTransparent = true
     isMovableByWindowBackground = false  // Position controlled by Ghostty tracking
-    collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
     hasShadow = false
     animationBehavior = .utilityWindow
     minSize = NSSize(width: 180, height: 300)
