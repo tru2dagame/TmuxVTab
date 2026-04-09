@@ -209,6 +209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
         guard let self else { return }
         if self.ghosttyMonitor.isGhosttyFullscreen {
           self.panel?.isMovableByWindowBackground = true
+          // Re-order to move panel into Ghostty's new fullscreen Space
+          self.panel?.orderFront(nil)
           self.positionFloatPanel()
         } else {
           // Exiting fullscreen → always restore dock mode
