@@ -1,4 +1,41 @@
 import Foundation
+import SwiftUI
+
+// MARK: - Theme (mirrors hiroppy/tmux-agent-sidebar 256-color palette)
+
+/// SwiftUI colors converted from the ANSI 256-color indices used by
+/// tmux-agent-sidebar's default `ColorTheme`. Keeping the same RGB
+/// values keeps the two UIs visually compatible.
+enum ThemeColor {
+  // Agent labels
+  static let agentClaude   = rgb(215, 135, 135) // 174 — soft coral
+  static let agentCodex    = rgb(175, 135, 215) // 141 — soft purple
+  static let agentOpenCode = rgb( 95, 215, 255) // 117 — soft cyan
+  // Status
+  static let statusRunning = rgb(135, 215, 135) // 114
+  static let statusWaiting = rgb(255, 215,  95) // 221
+  static let statusIdle    = rgb(135, 175, 215) // 110
+  static let statusError   = rgb(215,  95,  95) // 167
+  static let statusUnknown = rgb(128, 128, 128) // 244
+  static let statusBg      = rgb(135, 175, 215) // 110 (background == idle hue)
+  // Text
+  static let textActive    = rgb(238, 238, 238) // 255
+  static let textMuted     = rgb(208, 208, 208) // 252
+  static let textInactive  = rgb(128, 128, 128) // 244
+  // Accents
+  static let responseArrow = rgb( 95, 215, 255) // 81  — cyan
+  static let waitReason    = rgb(255, 215,  95) // 221 — yellow
+  static let subagent      = rgb( 95, 175, 175) // 73  — teal
+  static let taskProgress  = rgb(255, 215, 175) // 223 — soft gold
+  // Permission badges
+  static let badgeDanger   = rgb(215,  95,  95) // 167
+  static let badgeAuto     = rgb(255, 215,  95) // 221
+  static let badgePlan     = rgb( 95, 215, 255) // 117
+
+  private static func rgb(_ r: Int, _ g: Int, _ b: Int) -> Color {
+    Color(red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255)
+  }
+}
 
 struct TmuxSession: Identifiable, Hashable, Sendable {
   let id: String
@@ -93,6 +130,24 @@ enum PromptSource: String, Hashable, Sendable {
   case response  // agent's last response preview (Stop hook)
 }
 
+/// Permission badge mirrors hiroppy's `PermissionMode::badge()` labels and
+/// `theme.badge_*` colors so the visual cue is consistent across sidebars.
+struct PermissionBadge: Hashable, Sendable {
+  let label: String
+  let kind: Kind
+
+  enum Kind: Hashable, Sendable { case danger, auto, plan, muted }
+
+  var color: Color {
+    switch kind {
+    case .danger: return ThemeColor.badgeDanger
+    case .auto:   return ThemeColor.badgeAuto
+    case .plan:   return ThemeColor.badgePlan
+    case .muted:  return ThemeColor.textInactive
+    }
+  }
+}
+
 /// Snapshot of agent state for a single pane, populated by
 /// tmux-agent-sidebar hooks via `@pane_*` tmux options.
 struct AgentRuntime: Hashable, Sendable {
@@ -132,15 +187,48 @@ struct AgentRuntime: Hashable, Sendable {
 
   var needsAttention: Bool { attention == "notification" }
 
-  /// Single-line, collapsed prompt preview suitable for a sidebar row.
-  var promptPreview: String? {
-    guard let prompt, !prompt.isEmpty else { return nil }
-    let collapsed = prompt
-      .replacingOccurrences(of: "\r\n", with: " ")
-      .replacingOccurrences(of: "\n", with: " ")
-      .replacingOccurrences(of: "\t", with: " ")
-    let trimmed = collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
+  /// Trimmed prompt with leading/trailing whitespace removed; newlines kept
+  /// for multi-line rendering (SwiftUI `Text` wraps them naturally).
+  var promptDisplay: String? {
+    guard let prompt else { return nil }
+    let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
+  }
+
+  /// Mirrors hiroppy's `PermissionMode::badge()` mapping. Returns nil for
+  /// the default mode (no badge shown).
+  var permissionBadge: PermissionBadge? {
+    guard let mode = permissionMode, !mode.isEmpty else { return nil }
+    switch mode {
+    case "bypassPermissions": return PermissionBadge(label: "!",       kind: .danger)
+    case "plan":              return PermissionBadge(label: "plan",    kind: .plan)
+    case "acceptEdits":       return PermissionBadge(label: "edit",    kind: .auto)
+    case "auto":              return PermissionBadge(label: "auto",    kind: .auto)
+    case "dontAsk":           return PermissionBadge(label: "dontAsk", kind: .auto)
+    case "defer":             return PermissionBadge(label: "defer",   kind: .auto)
+    case "default":           return nil
+    default:                  return PermissionBadge(label: mode,      kind: .muted)
+    }
+  }
+
+  /// Human-readable wait reason mirroring hiroppy's `wait_reason_label`.
+  var waitReasonLabel: String? {
+    guard let raw = waitReason, !raw.isEmpty else { return nil }
+    switch raw {
+    case "permission_prompt":       return "permission required"
+    case "idle_prompt":              return "waiting for input"
+    case "auth_success":             return "auth success"
+    case "elicitation_dialog":       return "waiting for selection"
+    case "rate_limit":               return "rate limit"
+    case "permission_denied":        return "permission denied"
+    case "session_resumed":          return "resumed"
+    case "session_resumed_compact":  return "resumed (compact)"
+    default:
+      if let rest = raw.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init).asTeammateIdlePayload() {
+        return rest
+      }
+      return raw
+    }
   }
 
   /// Maps the hook-reported agent name onto our `DetectedAgent` enum for icon reuse.
@@ -150,6 +238,20 @@ struct AgentRuntime: Hashable, Sendable {
     case "codex": .codex
     default: nil
     }
+  }
+}
+
+private extension Array where Element == String {
+  /// Parses a `teammate_idle:Name[:Why]` split into a friendly label.
+  /// Returns nil when the head is not `teammate_idle`.
+  func asTeammateIdlePayload() -> String? {
+    guard count >= 2, self[0] == "teammate_idle" else { return nil }
+    let rest = self[1]
+    let parts = rest.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+    if parts.count == 2, !parts[1].isEmpty {
+      return "\(parts[0]) idle (\(parts[1]))"
+    }
+    return "\(rest) idle"
   }
 }
 
