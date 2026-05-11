@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor @Observable
@@ -105,6 +106,34 @@ final class TmuxService {
         self.error = error.localizedDescription
       }
     }
+  }
+
+  // MARK: - Pane Navigation
+
+  /// Jumps the attached tmux client to the given window, then activates
+  /// Ghostty so the user immediately sees the result. Mirrors
+  /// `tmux-agent-sidebar::select_pane`: switch-client → select-window → select-pane.
+  func jumpTo(window: TmuxWindow) async {
+    guard let tmuxPath else { return }
+    let target = "\(window.sessionName):\(window.windowIndex)"
+    // switch-client without -c retargets the most recently attached client
+    // — that's the Ghostty terminal the user is looking at.
+    _ = try? await run(tmuxPath, arguments: ["switch-client", "-t", window.sessionName])
+    _ = try? await run(tmuxPath, arguments: ["select-window", "-t", target])
+    if !window.paneId.isEmpty {
+      _ = try? await run(tmuxPath, arguments: ["select-pane", "-t", window.paneId])
+    }
+    activateGhostty()
+    // Refresh once promptly so the active window indicator updates without
+    // waiting for the next 3s poll tick.
+    await refresh()
+  }
+
+  private func activateGhostty() {
+    guard let app = NSRunningApplication.runningApplications(
+      withBundleIdentifier: "com.mitchellh.ghostty"
+    ).first else { return }
+    app.activate()
   }
 
   // MARK: - Tmux Fetching

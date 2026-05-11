@@ -86,7 +86,9 @@ struct SidebarContentView: View {
     ScrollView {
       LazyVStack(spacing: 2) {
         ForEach(tmuxService.sessions) { session in
-          SessionSectionView(session: session)
+          SessionSectionView(session: session) { window in
+            Task { await tmuxService.jumpTo(window: window) }
+          }
         }
       }
       .padding(.horizontal, 8)

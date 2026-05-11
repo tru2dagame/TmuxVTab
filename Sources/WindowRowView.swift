@@ -2,7 +2,9 @@ import SwiftUI
 
 struct WindowRowView: View {
   let window: TmuxWindow
+  let onSelect: () -> Void
   @Environment(\.sidebarFontScale) private var fontScale
+  @State private var isHovering = false
 
   /// Agent inferred from the hook plugin if available, falling back to ps-walk detection.
   private var effectiveAgent: DetectedAgent? {
@@ -103,12 +105,28 @@ struct WindowRowView: View {
     .padding(.horizontal, 8)
     .padding(.leading, 12)
     .padding(.vertical, 5)
-    .background(
-      window.isActive
-        ? AnyShapeStyle(.quaternary.opacity(0.3))
-        : AnyShapeStyle(.clear),
-      in: .rect(cornerRadius: 6)
-    )
+    .contentShape(.rect(cornerRadius: 6))
+    .background(rowBackground, in: .rect(cornerRadius: 6))
+    .onHover { hovering in
+      isHovering = hovering
+      if hovering {
+        NSCursor.pointingHand.push()
+      } else {
+        NSCursor.pop()
+      }
+    }
+    .onTapGesture { onSelect() }
+    .help("Jump to \(window.sessionName):\(window.windowIndex) \(window.windowName)")
+  }
+
+  private var rowBackground: AnyShapeStyle {
+    if window.isActive {
+      return AnyShapeStyle(.quaternary.opacity(0.3))
+    }
+    if isHovering {
+      return AnyShapeStyle(.quaternary.opacity(0.15))
+    }
+    return AnyShapeStyle(.clear)
   }
 
   @ViewBuilder
