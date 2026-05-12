@@ -1,0 +1,13 @@
+{
+  "name": "tru2dagame",
+  "owner": {
+    "name": "Tru"
+  },
+  "plugins": [
+    {
+      "name": "tmuxvtab",
+      "source": "./",
+      "description": "Surface Claude Code agent state into @pane_* tmux options for the TmuxVTab macOS sidebar"
+    }
+  ]
+}

@@ -43,6 +43,46 @@ swift build -c release
 bin/tmuxvtab start    # starts using locally built binary
 ```
 
+## Optional: Live agent state via Claude Code hooks
+
+Stream per-turn agent state (status, prompt, permission mode, subagents, wait
+reason) into the sidebar in real time. The hook handler binary comes from
+[hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar);
+TmuxVTab ships its own Claude Code plugin manifest that delegates to it.
+
+### 1. Install the hook handler binary
+
+Add to `~/.tmux.conf`:
+
+```bash
+set -g @plugin 'hiroppy/tmux-agent-sidebar'
+```
+
+Press `prefix + I` to install. The binary lands at
+`~/.tmux/plugins/tmux-agent-sidebar/bin/tmux-agent-sidebar`.
+
+### 2. Register the TmuxVTab Claude Code plugin
+
+In any running Claude Code session:
+
+```
+/plugin marketplace add ~/.tmux/plugins/TmuxVTab
+/plugin install tmuxvtab@tru2dagame
+/reload-plugins
+```
+
+This registers 16 hook events (`SessionStart`, `UserPromptSubmit`, `Stop`,
+`Notification`, `SubagentStart`, …) that write `@pane_*` tmux options. TmuxVTab
+reads those options on every poll.
+
+Verify it's working — send any prompt in a Claude pane, then:
+
+```bash
+tmux show-options -p -t <pane> @pane_agent     # → claude
+tmux show-options -p -t <pane> @pane_status    # → running / idle
+tmux show-options -p -t <pane> @pane_prompt    # → your last prompt
+```
+
 ## Usage
 
 All commands are available as tmux command aliases (no keybindings needed):
@@ -93,6 +133,12 @@ TmuxVTab is a native macOS app (AppKit + SwiftUI) that runs as a background agen
 2. Polls tmux sessions/windows every 3 seconds via CLI
 3. Detects coding agents by walking the process tree from each pane's PID
 4. Renders a floating `NSPanel` that tracks Ghostty's window frame
+
+## Thanks
+
+The hook handler binary and the `@pane_*` data model come from
+[hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) —
+TmuxVTab's live agent state is a thin macOS UI on top of that work.
 
 ## License
 

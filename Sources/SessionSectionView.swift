@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SessionSectionView: View {
   let session: TmuxSession
+  let onSelectWindow: (TmuxWindow) -> Void
   @State private var isExpanded = true
   @Environment(\.sidebarFontScale) private var fontScale
 
@@ -43,7 +44,9 @@ struct SessionSectionView: View {
       // Windows
       if isExpanded {
         ForEach(session.windows) { window in
-          WindowRowView(window: window)
+          WindowRowView(window: window) {
+            onSelectWindow(window)
+          }
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
       }
