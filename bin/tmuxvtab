@@ -9,6 +9,8 @@ BINARY="$PROJECT_DIR/.build/release/TmuxVTab"
 PIDFILE="${TMPDIR:-/tmp}/tmuxvtab.pid"
 LOGFILE="${TMPDIR:-/tmp}/tmuxvtab.log"
 BUNDLE_ID="app.tru2dagame.tmuxvtab"
+SIDEBAR_BINARY_NAME="tmux-agent-sidebar"
+SIDEBAR_REPO="tru2dagame/tmux-agent-sidebar"
 
 _arch() {
   case "$(uname -m)" in
@@ -98,6 +100,57 @@ _ensure_binary() {
   exit 1
 }
 
+_sidebar_binary_path() {
+  echo "$PROJECT_DIR/bin/$SIDEBAR_BINARY_NAME"
+}
+
+# True if a sidebar hook handler binary is reachable by hook.sh. Mirrors the
+# fallback order hook.sh walks: this plugin's bin/, then a TPM-installed
+# tmux-agent-sidebar plugin, then $PATH.
+_sidebar_binary_available() {
+  [[ -x "$(_sidebar_binary_path)" ]] && return 0
+  [[ -x "$HOME/.tmux/plugins/tmux-agent-sidebar/bin/$SIDEBAR_BINARY_NAME" ]] && return 0
+  [[ -x "$HOME/.tmux/plugins/tmux-agent-sidebar/target/release/$SIDEBAR_BINARY_NAME" ]] && return 0
+  command -v "$SIDEBAR_BINARY_NAME" &>/dev/null && return 0
+  return 1
+}
+
+# Best-effort download of the Claude Code hook handler binary
+# (tru2dagame/tmux-agent-sidebar). Without it, the Claude Code plugin's
+# hook.sh exits silently and the sidebar shows no live agent state. With
+# it, status / prompt / permission / subagent flow into @pane_* options.
+_ensure_sidebar_binary() {
+  if _sidebar_binary_available; then return 0; fi
+
+  local arch_id
+  case "$(uname -m)" in
+    arm64)  arch_id="aarch64" ;;
+    x86_64) arch_id="x86_64"  ;;
+    *)      return 1 ;;
+  esac
+  local asset="${SIDEBAR_BINARY_NAME}-darwin-${arch_id}"
+  local target
+  target="$(_sidebar_binary_path)"
+  local url="https://github.com/${SIDEBAR_REPO}/releases/latest/download/${asset}"
+
+  mkdir -p "$(dirname "$target")"
+  echo "Downloading hook handler from $url..."
+  if curl -fsSL "$url" -o "$target.tmp"; then
+    mv -f "$target.tmp" "$target"
+    chmod +x "$target"
+    # Strip macOS quarantine + adhoc re-sign so Gatekeeper on Sequoia+
+    # doesn't SIGKILL downloaded binaries.
+    xattr -d com.apple.provenance "$target" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$target" 2>/dev/null || true
+    codesign --force --sign - "$target" >/dev/null 2>&1 || true
+    echo "Hook handler ready: $target"
+  else
+    rm -f "$target.tmp"
+    echo "Hook handler download failed — sidebar will run without live agent state." >&2
+    return 1
+  fi
+}
+
 _is_running() {
   [[ -f "$PIDFILE" ]] || return 1
   local pid
@@ -107,6 +160,10 @@ _is_running() {
 }
 
 _start() {
+  # Ensure hook binary even when TmuxVTab is already up — covers the upgrade
+  # path where a prior install ran without auto-download.
+  _ensure_sidebar_binary || true
+
   if _is_running; then
     echo "TmuxVTab is already running (pid $(cat "$PIDFILE"))"
     return 0

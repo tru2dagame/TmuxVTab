@@ -49,21 +49,10 @@ Stream per-turn agent state (status, prompt, permission mode, subagents, wait
 reason) into the sidebar in real time. The hook handler binary comes from
 [tru2dagame/tmux-agent-sidebar](https://github.com/tru2dagame/tmux-agent-sidebar)
 — a stability fork of [hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar)
-that pulls binaries from its own release pipeline. TmuxVTab ships its own
-Claude Code plugin manifest that delegates to it.
+that pulls binaries from its own release pipeline. The TmuxVTab TPM install
+auto-downloads it on first start, so no extra `@plugin` line is needed.
 
-### 1. Install the hook handler binary
-
-Add to `~/.tmux.conf`:
-
-```bash
-set -g @plugin 'tru2dagame/tmux-agent-sidebar'
-```
-
-Press `prefix + I` to install. The binary lands at
-`~/.tmux/plugins/tmux-agent-sidebar/bin/tmux-agent-sidebar`.
-
-### 2. Register the TmuxVTab Claude Code plugin
+### Register the TmuxVTab Claude Code plugin
 
 In any running Claude Code session:
 

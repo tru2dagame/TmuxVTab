@@ -13,12 +13,18 @@
 # installed.
 
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-# TPM-installed location for tmux-agent-sidebar — the project that ships
-# the hook handler binary today.
+# TmuxVTab TPM-install path — the wrapper script there auto-downloads the
+# binary on `tmuxvtab start`, so a single `set -g @plugin 'tru2dagame/TmuxVTab'`
+# is enough to get hooks working end-to-end.
+TMUXVTAB_TPM_DIR="$HOME/.tmux/plugins/TmuxVTab"
+# Standalone tmux-agent-sidebar TPM plugin path — used when the user also
+# installed it directly via `set -g @plugin 'tru2dagame/tmux-agent-sidebar'`.
 SIDEBAR_TPM_DIR="$HOME/.tmux/plugins/tmux-agent-sidebar"
 
 if [ -x "$PLUGIN_DIR/bin/tmux-agent-sidebar" ]; then
   BIN="$PLUGIN_DIR/bin/tmux-agent-sidebar"
+elif [ -x "$TMUXVTAB_TPM_DIR/bin/tmux-agent-sidebar" ]; then
+  BIN="$TMUXVTAB_TPM_DIR/bin/tmux-agent-sidebar"
 elif [ -x "$SIDEBAR_TPM_DIR/bin/tmux-agent-sidebar" ]; then
   BIN="$SIDEBAR_TPM_DIR/bin/tmux-agent-sidebar"
 elif [ -x "$SIDEBAR_TPM_DIR/target/release/tmux-agent-sidebar" ]; then
