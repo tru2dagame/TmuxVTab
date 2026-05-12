@@ -47,15 +47,17 @@ bin/tmuxvtab start    # starts using locally built binary
 
 Stream per-turn agent state (status, prompt, permission mode, subagents, wait
 reason) into the sidebar in real time. The hook handler binary comes from
-[hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar);
-TmuxVTab ships its own Claude Code plugin manifest that delegates to it.
+[tru2dagame/tmux-agent-sidebar](https://github.com/tru2dagame/tmux-agent-sidebar)
+— a stability fork of [hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar)
+that pulls binaries from its own release pipeline. TmuxVTab ships its own
+Claude Code plugin manifest that delegates to it.
 
 ### 1. Install the hook handler binary
 
 Add to `~/.tmux.conf`:
 
 ```bash
-set -g @plugin 'hiroppy/tmux-agent-sidebar'
+set -g @plugin 'tru2dagame/tmux-agent-sidebar'
 ```
 
 Press `prefix + I` to install. The binary lands at
@@ -138,7 +140,9 @@ TmuxVTab is a native macOS app (AppKit + SwiftUI) that runs as a background agen
 
 The hook handler binary and the `@pane_*` data model come from
 [hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) —
-TmuxVTab's live agent state is a thin macOS UI on top of that work.
+TmuxVTab's live agent state is a thin macOS UI on top of that work. We mirror
+that codebase at [tru2dagame/tmux-agent-sidebar](https://github.com/tru2dagame/tmux-agent-sidebar)
+so TmuxVTab installs stay reproducible.
 
 ## License
 
