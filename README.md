@@ -83,12 +83,6 @@ tmux show-options -p -t <pane> @pane_status    # → running / idle
 tmux show-options -p -t <pane> @pane_prompt    # → your last prompt
 ```
 
-> If you previously installed hiroppy's Claude Code plugin (`tmux-agent-sidebar@hiroppy`),
-> uninstall it so hooks don't fire twice:
-> ```
-> /plugin uninstall tmux-agent-sidebar@hiroppy
-> ```
-
 ## Usage
 
 All commands are available as tmux command aliases (no keybindings needed):
@@ -139,6 +133,12 @@ TmuxVTab is a native macOS app (AppKit + SwiftUI) that runs as a background agen
 2. Polls tmux sessions/windows every 3 seconds via CLI
 3. Detects coding agents by walking the process tree from each pane's PID
 4. Renders a floating `NSPanel` that tracks Ghostty's window frame
+
+## Thanks
+
+The hook handler binary and the `@pane_*` data model come from
+[hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar) —
+TmuxVTab's live agent state is a thin macOS UI on top of that work.
 
 ## License
 
