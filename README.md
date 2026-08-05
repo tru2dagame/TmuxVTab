@@ -88,6 +88,39 @@ display fields are capped more aggressively, and stale persisted pane state is
 dropped after 24 hours. If TmuxVTab is not running, hooks fail open and do not
 block either agent.
 
+### Check and update hooks
+
+TmuxVTab never silently replaces Agent hook definitions. Every event includes
+the hook bundle version, and the sidebar warns when a pane is using an older,
+newer, unknown, or inactive preview hook.
+
+Inspect the expected and installed versions at any time:
+
+```bash
+tmuxvtab hooks version
+tmuxvtab hooks check
+```
+
+`hooks check` exits non-zero when an installed hook is missing, disabled, or
+out of date, and prints the manual update commands. Update Claude Code with:
+
+```bash
+claude plugin marketplace update tru2dagame
+claude plugin update tmuxvtab@tru2dagame
+```
+
+Update a Git-backed Codex marketplace with:
+
+```bash
+codex plugin marketplace upgrade tru2dagame
+codex plugin add tmuxvtab@tru2dagame --json
+```
+
+For a local marketplace, update the repository directory instead. Then start a
+new Agent session. Claude Code may use `/reload-plugins`; Codex asks you to
+review changed hook definitions in `/hooks`. This explicit review is
+intentional because hooks can execute local commands.
+
 ## Usage
 
 All commands are available as tmux command aliases (no keybindings needed):
@@ -135,6 +168,10 @@ bin/tmuxvtab restart
 ```
 
 Omit `TMUXVTAB_RELEASE_TAG` to return to the latest stable release.
+
+After changing versions, run `tmuxvtab hooks check` and update the Agent
+plugins separately; downloading the VTab binary does not silently replace
+their hook definitions.
 
 ## Requirements
 

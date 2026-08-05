@@ -196,6 +196,7 @@ Commands:
   download  Download pre-built binary from GitHub Releases
   log       Tail the log file
   hook      Internal lifecycle-hook transport
+  hooks     Show or check installed hook versions
 
 Without arguments, starts TmuxVTab (same as 'start').
 EOF
@@ -222,6 +223,11 @@ case "${1:-start}" in
       exit 0
     fi
     exec "$BINARY" hook "$@"
+    ;;
+  hooks)
+    _ensure_binary
+    shift
+    exec "$BINARY" hooks "$@"
     ;;
   -h|--help|help) _usage ;;
   *)

@@ -4,6 +4,10 @@ if let hookExitCode = AgentHookCommand.runIfRequested() {
   exit(hookExitCode)
 }
 
+if let hookStatusExitCode = HookStatusCommand.runIfRequested() {
+  exit(hookStatusExitCode)
+}
+
 do {
   try AgentIPC.publishCurrentExecutable()
 } catch {
