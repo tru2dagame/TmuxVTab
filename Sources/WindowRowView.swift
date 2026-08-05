@@ -55,6 +55,10 @@ struct WindowRowView: View {
         subtitle
 
         if let runtime = window.agentRuntime {
+          if runtime.hookCompatibility != .current {
+            hookWarning(runtime)
+          }
+
           if !runtime.subagents.isEmpty {
             ForEach(Array(runtime.subagents.enumerated()), id: \.offset) { idx, name in
               Text("\(idx == runtime.subagents.count - 1 ? "└" : "├") \(name)")
@@ -88,6 +92,12 @@ struct WindowRowView: View {
               .foregroundStyle(window.isActive ? ThemeColor.textActive : ThemeColor.textInactive)
               .lineLimit(1)
           }
+        } else if effectiveAgent == .claudeCode || effectiveAgent == .codex {
+          Text("Preview inactive · tmuxvtab hooks check")
+            .scaledFont(size: 9, design: .monospaced)
+            .foregroundStyle(ThemeColor.statusWaiting)
+            .lineLimit(1)
+            .truncationMode(.tail)
         }
       }
 
@@ -179,6 +189,27 @@ struct WindowRowView: View {
         .truncationMode(.tail)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  @ViewBuilder
+  private func hookWarning(_ runtime: AgentRuntime) -> some View {
+    let message = switch runtime.hookCompatibility {
+    case .hookUpdateRequired:
+      "Hook \(runtime.hookVersion ?? "?") · update available"
+    case .appUpdateRequired:
+      "Hook \(runtime.hookVersion ?? "?") · update TmuxVTab"
+    case .unknown:
+      "Hook version unknown · run hooks check"
+    case .current:
+      ""
+    }
+    if !message.isEmpty {
+      Text(message)
+        .scaledFont(size: 9, weight: .medium, design: .monospaced)
+        .foregroundStyle(ThemeColor.statusWaiting)
+        .lineLimit(1)
+        .truncationMode(.tail)
     }
   }
 

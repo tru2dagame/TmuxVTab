@@ -31,6 +31,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
   static let protocolVersion = 1
 
   let version: Int
+  let hookVersion: String?
   let source: AgentSource
   let kind: AgentEventKind
   let sessionID: String
@@ -51,6 +52,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
     source: AgentSource,
     kind: AgentEventKind,
     sessionID: String,
+    hookVersion: String? = nil,
     turnID: String? = nil,
     paneID: String,
     cwd: String? = nil,
@@ -65,6 +67,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
     timestamp: Date = Date()
   ) {
     self.version = Self.protocolVersion
+    self.hookVersion = hookVersion
     self.source = source
     self.kind = kind
     self.sessionID = sessionID
@@ -148,6 +151,7 @@ enum AgentHookNormalizer {
       source: source,
       kind: kind,
       sessionID: sessionID,
+      hookVersion: bounded(environment["TMUXVTAB_HOOK_VERSION"], maximumMetadataLength),
       turnID: bounded(payload["turn_id"] as? String, maximumMetadataLength),
       paneID: bounded(paneID, maximumMetadataLength) ?? paneID,
       cwd: bounded(payload["cwd"] as? String, maximumMetadataLength),

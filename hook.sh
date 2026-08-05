@@ -6,6 +6,18 @@
 AGENT="${1:-auto}"
 EVENT="${2:-}"
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+HOOK_VERSION_FILE="$PLUGIN_DIR/hooks/VERSION"
+HOOK_VERSION="unknown"
+if [[ -f "$HOOK_VERSION_FILE" ]]; then
+  HOOK_VERSION="$(tr -d '[:space:]' < "$HOOK_VERSION_FILE")"
+fi
+
+if [[ "$AGENT" == "--version" || "$AGENT" == "version" ]]; then
+  printf '%s\n' "$HOOK_VERSION"
+  exit 0
+fi
+
+export TMUXVTAB_HOOK_VERSION="$HOOK_VERSION"
 TMUXVTAB_TPM_DIR="$HOME/.tmux/plugins/TmuxVTab"
 TMUXVTAB_TPM_DIR_LOWER="$HOME/.tmux/plugins/tmuxvtab"
 PUBLISHED_BIN="$HOME/Library/Application Support/TmuxVTab/TmuxVTab-hook"

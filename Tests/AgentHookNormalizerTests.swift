@@ -18,7 +18,11 @@ struct AgentHookNormalizerTests {
       agentHint: "auto",
       eventHint: "user-prompt-submit",
       input: input,
-      environment: ["TMUX_PANE": "%7", "CLAUDE_PLUGIN_ROOT": "/plugin"]
+      environment: [
+        "TMUX_PANE": "%7",
+        "CLAUDE_PLUGIN_ROOT": "/plugin",
+        "TMUXVTAB_HOOK_VERSION": HookVersion.current,
+      ]
     ))
 
     #expect(event.source == .claude)
@@ -26,6 +30,7 @@ struct AgentHookNormalizerTests {
     #expect(event.paneID == "%7")
     #expect(event.prompt == "Explain the failing test")
     #expect(event.permissionMode == "plan")
+    #expect(event.hookVersion == HookVersion.current)
   }
 
   @Test func detectsCodexAndNormalizesCompletion() throws {

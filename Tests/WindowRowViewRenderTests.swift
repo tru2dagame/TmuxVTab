@@ -11,6 +11,7 @@ struct WindowRowViewRenderTests {
     let approvalImage = try render(runtime: AgentRuntime(
       source: .codex,
       phase: .waitingForApproval,
+      hookVersion: HookVersion.current,
       permissionMode: "default",
       sessionID: "synthetic",
       question: question,
@@ -22,6 +23,7 @@ struct WindowRowViewRenderTests {
     let completionImage = try render(runtime: AgentRuntime(
       source: .claude,
       phase: .complete,
+      hookVersion: "0.2.0",
       permissionMode: "plan",
       sessionID: "synthetic",
       question: question,

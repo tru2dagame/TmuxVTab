@@ -145,6 +145,7 @@ struct PermissionBadge: Hashable, Sendable {
 /// stores previews rather than complete transcripts.
 struct AgentRuntime: Codable, Hashable, Sendable {
   let source: AgentSource
+  var hookVersion: String?
   var phase: AgentPhase
   var permissionMode: String?
   var sessionID: String
@@ -162,6 +163,7 @@ struct AgentRuntime: Codable, Hashable, Sendable {
   init(
     source: AgentSource,
     phase: AgentPhase,
+    hookVersion: String? = nil,
     permissionMode: String? = nil,
     sessionID: String,
     turnID: String? = nil,
@@ -176,6 +178,7 @@ struct AgentRuntime: Codable, Hashable, Sendable {
     updatedAt: Date = Date()
   ) {
     self.source = source
+    self.hookVersion = hookVersion
     self.phase = phase
     self.permissionMode = permissionMode
     self.sessionID = sessionID
@@ -206,6 +209,10 @@ struct AgentRuntime: Codable, Hashable, Sendable {
   }
 
   var detectedAgent: DetectedAgent { source.detectedAgent }
+
+  var hookCompatibility: HookCompatibility {
+    HookVersion.compatibility(with: hookVersion)
+  }
 }
 
 // MARK: - Agent Detection

@@ -42,6 +42,7 @@ final class AgentStateStore {
       runtime = AgentRuntime(
         source: event.source,
         phase: .unknown,
+        hookVersion: event.hookVersion,
         permissionMode: event.permissionMode,
         sessionID: event.sessionID,
         turnID: event.turnID,
@@ -52,6 +53,7 @@ final class AgentStateStore {
     }
 
     runtime.permissionMode = event.permissionMode ?? runtime.permissionMode
+    runtime.hookVersion = event.hookVersion ?? runtime.hookVersion
     runtime.turnID = event.turnID ?? runtime.turnID
     runtime.cwd = event.cwd ?? runtime.cwd
     runtime.model = event.model ?? runtime.model

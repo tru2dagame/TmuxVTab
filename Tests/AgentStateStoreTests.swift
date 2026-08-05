@@ -10,7 +10,7 @@ struct AgentStateStoreTests {
     let stateURL = directory.appendingPathComponent("state.json")
     let store = AgentStateStore(persistenceURL: stateURL)
 
-    store.apply(event(.userPrompt, prompt: "What is broken?"))
+    store.apply(event(.userPrompt, prompt: "What is broken?", hookVersion: HookVersion.current))
     store.apply(event(.approvalRequired, detail: "Run integration tests"))
 
     var runtime = try #require(store.runtime(for: "%1"))
@@ -18,6 +18,7 @@ struct AgentStateStoreTests {
     #expect(runtime.question == "What is broken?")
     #expect(runtime.approval == "Run integration tests")
     #expect(runtime.needsAttention)
+    #expect(runtime.hookCompatibility == .current)
 
     store.apply(event(.completed, response: "The socket path was stale."))
     runtime = try #require(store.runtime(for: "%1"))
@@ -58,12 +59,14 @@ struct AgentStateStoreTests {
     sessionID: String = "session",
     prompt: String? = nil,
     response: String? = nil,
-    detail: String? = nil
+    detail: String? = nil,
+    hookVersion: String? = nil
   ) -> AgentEvent {
     AgentEvent(
       source: .codex,
       kind: kind,
       sessionID: sessionID,
+      hookVersion: hookVersion,
       paneID: "%1",
       prompt: prompt,
       response: response,

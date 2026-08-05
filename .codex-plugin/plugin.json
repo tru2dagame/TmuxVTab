@@ -1,6 +1,6 @@
 {
   "name": "tmuxvtab",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Show local Codex prompts, progress, approvals, and results in the TmuxVTab macOS sidebar",
   "author": {
     "name": "Tru",
