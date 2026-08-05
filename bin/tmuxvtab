@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="tru2dagame/tmuxvtab"
 RELEASE_TAG="${TMUXVTAB_RELEASE_TAG:-}"
+RELEASE_CHANNEL="${TMUXVTAB_RELEASE_CHANNEL:-stable}"
 BINARY="$PROJECT_DIR/.build/release/TmuxVTab"
 PIDFILE="${TMPDIR:-/tmp}/tmuxvtab.pid"
 LOGFILE="${TMPDIR:-/tmp}/tmuxvtab.log"
@@ -19,22 +20,78 @@ _arch() {
   esac
 }
 
+_latest_prerelease_tag() {
+  if command -v gh &>/dev/null; then
+    local gh_tag
+    gh_tag=$(gh release list \
+      --repo "$REPO" \
+      --limit 50 \
+      --json tagName,isDraft,isPrerelease \
+      --jq 'map(select(.isPrerelease and (.isDraft | not)))[0].tagName' 2>/dev/null) || gh_tag=""
+    if [[ -n "$gh_tag" ]]; then
+      printf '%s\n' "$gh_tag"
+      return 0
+    fi
+  fi
+
+  local releases_file index prerelease draft tag
+  releases_file=$(mktemp)
+  if ! curl -fsSL \
+    -o "$releases_file" \
+    "https://api.github.com/repos/${REPO}/releases?per_page=50"; then
+    rm -f "$releases_file"
+    return 1
+  fi
+
+  for ((index = 0; index < 50; index++)); do
+    prerelease=$(/usr/bin/plutil -extract "${index}.prerelease" raw -o - "$releases_file" 2>/dev/null) || break
+    draft=$(/usr/bin/plutil -extract "${index}.draft" raw -o - "$releases_file" 2>/dev/null) || break
+    if [[ "$prerelease" == "true" && "$draft" == "false" ]]; then
+      tag=$(/usr/bin/plutil -extract "${index}.tag_name" raw -o - "$releases_file" 2>/dev/null)
+      rm -f "$releases_file"
+      [[ -n "$tag" ]] || return 1
+      printf '%s\n' "$tag"
+      return 0
+    fi
+  done
+
+  rm -f "$releases_file"
+  return 1
+}
+
 _download() {
-  local arch asset url
+  local arch asset url selected_tag
   arch=$(_arch)
   asset="TmuxVTab-darwin-${arch}"
+  selected_tag="$RELEASE_TAG"
 
-  if [[ -n "$RELEASE_TAG" ]]; then
-    echo "Downloading ${asset} from GitHub Release ${RELEASE_TAG}..."
+  case "$RELEASE_CHANNEL" in
+    ""|stable) ;;
+    rc|prerelease)
+      if [[ -z "$selected_tag" ]]; then
+        selected_tag=$(_latest_prerelease_tag) || {
+          echo "Unable to resolve the latest prerelease." >&2
+          return 1
+        }
+      fi
+      ;;
+    *)
+      echo "Unknown release channel: $RELEASE_CHANNEL (expected stable or rc)" >&2
+      return 2
+      ;;
+  esac
+
+  if [[ -n "$selected_tag" ]]; then
+    echo "Downloading ${asset} from GitHub Release ${selected_tag}..."
   else
-    echo "Downloading ${asset} from the latest GitHub Release..."
+    echo "Downloading ${asset} from the latest stable GitHub Release..."
   fi
 
   # Try gh CLI first (handles auth), fall back to curl
   if command -v gh &>/dev/null; then
     local gh_args=(release download --repo "$REPO" --pattern "$asset" --dir "$PROJECT_DIR/.build/release" --clobber)
-    if [[ -n "$RELEASE_TAG" ]]; then
-      gh_args+=("$RELEASE_TAG")
+    if [[ -n "$selected_tag" ]]; then
+      gh_args+=("$selected_tag")
     fi
     if gh "${gh_args[@]}" 2>/dev/null; then
       mv "$PROJECT_DIR/.build/release/$asset" "$BINARY"
@@ -45,8 +102,8 @@ _download() {
   fi
 
   # Fallback: curl from latest release
-  if [[ -n "$RELEASE_TAG" ]]; then
-    url="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${asset}"
+  if [[ -n "$selected_tag" ]]; then
+    url="https://github.com/${REPO}/releases/download/${selected_tag}/${asset}"
   else
     url="https://github.com/${REPO}/releases/latest/download/${asset}"
   fi
@@ -193,7 +250,8 @@ Commands:
   float     Overlay on Ghostty edge (for fullscreen use)
   dock      Snap outside Ghostty edge (default)
   build     Build from source
-  download  Download pre-built binary from GitHub Releases
+  download [stable|rc|TAG]
+            Download from a release channel (default: stable)
   log       Tail the log file
   hook      Internal lifecycle-hook transport
   hooks     Show or check installed hook versions
@@ -214,7 +272,21 @@ case "${1:-start}" in
   float)    _set_and_signal floatMode bool true     ;;
   dock)     _set_and_signal floatMode bool false    ;;
   build)    _build   ;;
-  download) _ensure_build_dir; _download ;;
+  download)
+    case "${2:-}" in
+      "") ;;
+      stable) RELEASE_TAG=""; RELEASE_CHANNEL=stable ;;
+      rc|prerelease) RELEASE_TAG=""; RELEASE_CHANNEL=rc ;;
+      v*) RELEASE_TAG="$2"; RELEASE_CHANNEL=stable ;;
+      *)
+        echo "Unknown release channel or tag: $2" >&2
+        echo "Usage: tmuxvtab download [stable|rc|TAG]" >&2
+        exit 2
+        ;;
+    esac
+    _ensure_build_dir
+    _download
+    ;;
   log)      tail -f "$LOGFILE" ;;
   hook)
     shift

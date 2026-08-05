@@ -163,11 +163,24 @@ Release candidates are opt-in and do not replace the latest stable release:
 
 ```bash
 cd ~/.tmux/plugins/TmuxVTab
-TMUXVTAB_RELEASE_TAG=v1.1.0-rc.1 bin/tmuxvtab download
+bin/tmuxvtab download rc
 bin/tmuxvtab restart
 ```
 
-Omit `TMUXVTAB_RELEASE_TAG` to return to the latest stable release.
+The `rc` channel always resolves the newest non-draft prerelease, so the same
+command can be run again when a newer release candidate is published. Return
+to the stable channel with:
+
+```bash
+bin/tmuxvtab download stable
+bin/tmuxvtab restart
+```
+
+An exact tag is still supported when reproducing a specific release:
+
+```bash
+bin/tmuxvtab download v1.1.0-rc.3
+```
 
 After changing versions, run `tmuxvtab hooks check` and update the Agent
 plugins separately; downloading the VTab binary does not silently replace
