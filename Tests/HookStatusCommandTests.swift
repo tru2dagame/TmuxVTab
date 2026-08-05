@@ -12,4 +12,18 @@ struct HookStatusCommandTests {
     #expect(report.contains("claude plugin update tmuxvtab@tru2dagame"))
     #expect(!report.contains("codex plugin marketplace upgrade"))
   }
+
+  @Test func localCodexMarketplaceDoesNotSuggestGitUpgrade() {
+    let report = HookStatusCommand.report([
+      .init(
+        source: .codex,
+        state: .installed(version: "0.2.0", enabled: true),
+        marketplace: .local(path: "/path/to/tmuxvtab")
+      ),
+    ])
+
+    #expect(report.contains("Update local Codex marketplace: /path/to/tmuxvtab"))
+    #expect(report.contains("codex plugin add tmuxvtab@tru2dagame --json"))
+    #expect(!report.contains("codex plugin marketplace upgrade"))
+  }
 }

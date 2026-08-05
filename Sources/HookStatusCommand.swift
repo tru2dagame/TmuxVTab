@@ -2,6 +2,11 @@ import Foundation
 
 enum HookStatusCommand {
   struct Installation: Sendable {
+    enum Marketplace: Sendable {
+      case git
+      case local(path: String)
+    }
+
     enum State: Sendable {
       case installed(version: String, enabled: Bool)
       case notInstalled
@@ -11,6 +16,13 @@ enum HookStatusCommand {
 
     let source: AgentSource
     let state: State
+    let marketplace: Marketplace?
+
+    init(source: AgentSource, state: State, marketplace: Marketplace? = nil) {
+      self.source = source
+      self.state = state
+      self.marketplace = marketplace
+    }
   }
 
   static func runIfRequested(arguments: [String] = CommandLine.arguments) -> Int32? {
@@ -69,7 +81,15 @@ enum HookStatusCommand {
         }
       }
       if installations.contains(where: { $0.source == .codex && needsHookUpdate($0) }) {
-        lines.append("  codex plugin marketplace upgrade tru2dagame")
+        let codex = installations.first(where: { $0.source == .codex })
+        switch codex?.marketplace {
+        case .git:
+          lines.append("  codex plugin marketplace upgrade tru2dagame")
+        case .local(let path):
+          lines.append("  Update local Codex marketplace: \(path)")
+        case nil:
+          break
+        }
         lines.append("  codex plugin add tmuxvtab@tru2dagame --json")
       }
       lines.append("Then start a new agent session; review changed hooks when prompted.")
@@ -112,7 +132,8 @@ enum HookStatusCommand {
     }
     return Installation(
       source: .codex,
-      state: .installed(version: plugin.version, enabled: plugin.enabled)
+      state: .installed(version: plugin.version, enabled: plugin.enabled),
+      marketplace: plugin.marketplaceSource?.installationKind
     )
   }
 
@@ -182,11 +203,26 @@ private struct CodexPlugin: Decodable {
   let pluginID: String
   let version: String
   let enabled: Bool
+  let marketplaceSource: CodexMarketplaceSource?
 
   enum CodingKeys: String, CodingKey {
     case pluginID = "pluginId"
     case version
     case enabled
+    case marketplaceSource
+  }
+}
+
+private struct CodexMarketplaceSource: Decodable {
+  let sourceType: String
+  let source: String
+
+  var installationKind: HookStatusCommand.Installation.Marketplace? {
+    switch sourceType {
+    case "git": .git
+    case "local": .local(path: source)
+    default: nil
+    }
   }
 }
 
