@@ -1,11 +1,7 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Theme (mirrors hiroppy/tmux-agent-sidebar 256-color palette)
-
-/// SwiftUI colors converted from the ANSI 256-color indices used by
-/// tmux-agent-sidebar's default `ColorTheme`. Keeping the same RGB
-/// values keeps the two UIs visually compatible.
+// MARK: - Agent preview theme
 enum ThemeColor {
   // Agent labels
   static let agentClaude   = rgb(215, 135, 135) // 174 — soft coral
@@ -17,7 +13,7 @@ enum ThemeColor {
   static let statusIdle    = rgb(135, 175, 215) // 110
   static let statusError   = rgb(215,  95,  95) // 167
   static let statusUnknown = rgb(128, 128, 128) // 244
-  static let statusBg      = rgb(135, 175, 215) // 110 (background == idle hue)
+  static let statusBg      = rgb(135, 175, 215) // 110
   // Text
   static let textActive    = rgb(238, 238, 238) // 255
   static let textMuted     = rgb(208, 208, 208) // 252
@@ -65,8 +61,8 @@ struct TmuxWindow: Identifiable, Hashable, Sendable {
   let paneId: String
   /// Detected coding agent running in this window (e.g., "Claude Code", "Codex").
   var detectedAgent: DetectedAgent?
-  /// Live agent runtime sourced from tmux-agent-sidebar hook-written pane options.
-  /// `nil` when the hook plugin is absent or has not yet emitted an event for this pane.
+  /// Live agent runtime sourced from TmuxVTab's local hook event socket.
+  /// `nil` when no supported hook has emitted an event for this pane.
   var agentRuntime: AgentRuntime?
 
   var target: String { "\(sessionName):\(windowIndex)" }
@@ -107,31 +103,28 @@ struct TmuxWindow: Identifiable, Hashable, Sendable {
   }
 }
 
-// MARK: - Agent Runtime (hook-driven)
+// MARK: - Agent Runtime (local hook socket)
 
-/// Per-pane status reported by the tmux-agent-sidebar hook plugin
-/// (`@pane_status`). Mirrors hiroppy/tmux-agent-sidebar's `PaneStatus`.
-enum PaneStatus: String, Hashable, Sendable {
+enum AgentPhase: String, Codable, Hashable, Sendable {
   case running
-  case background
-  case waiting
+  case waitingForApproval
+  case complete
   case idle
   case error
   case unknown
 
-  init(raw: String) {
-    self = PaneStatus(rawValue: raw) ?? .unknown
+  var label: String {
+    switch self {
+    case .running: "working"
+    case .waitingForApproval: "needs approval"
+    case .complete: "done"
+    case .idle: "ready"
+    case .error: "error"
+    case .unknown: "unknown"
+    }
   }
 }
 
-/// Source of the most recent text stored in `@pane_prompt`.
-enum PromptSource: String, Hashable, Sendable {
-  case user      // user-submitted prompt (UserPromptSubmit hook)
-  case response  // agent's last response preview (Stop hook)
-}
-
-/// Permission badge mirrors hiroppy's `PermissionMode::badge()` labels and
-/// `theme.badge_*` colors so the visual cue is consistent across sidebars.
 struct PermissionBadge: Hashable, Sendable {
   let label: String
   let kind: Kind
@@ -148,55 +141,56 @@ struct PermissionBadge: Hashable, Sendable {
   }
 }
 
-/// Snapshot of agent state for a single pane, populated by
-/// tmux-agent-sidebar hooks via `@pane_*` tmux options.
-struct AgentRuntime: Hashable, Sendable {
-  let agent: String         // "claude" / "codex" / "opencode"
-  let status: PaneStatus
-  let permissionMode: String?
-  let attention: String?    // "notification" when the agent wants attention
-  let waitReason: String?
-  let sessionId: String?
-  let subagents: [String]   // active subagent labels (already include "#N" suffix when set by hook)
-  /// Latest prompt or response text the hook has captured. Fetched out-of-band
-  /// because it can contain newlines that would break tab/pipe-delimited parsing.
-  var prompt: String?
-  var promptSource: PromptSource?
+/// The reduced, display-safe state retained for one tmux pane. It deliberately
+/// stores previews rather than complete transcripts.
+struct AgentRuntime: Codable, Hashable, Sendable {
+  let source: AgentSource
+  var phase: AgentPhase
+  var permissionMode: String?
+  var sessionID: String
+  var turnID: String?
+  var cwd: String?
+  var model: String?
+  var question: String?
+  var response: String?
+  var activity: String?
+  var approval: String?
+  var subagents: [String]
+  var needsAttention: Bool
+  var updatedAt: Date
 
   init(
-    agent: String,
-    status: PaneStatus,
+    source: AgentSource,
+    phase: AgentPhase,
     permissionMode: String? = nil,
-    attention: String? = nil,
-    waitReason: String? = nil,
-    sessionId: String? = nil,
+    sessionID: String,
+    turnID: String? = nil,
+    cwd: String? = nil,
+    model: String? = nil,
+    question: String? = nil,
+    response: String? = nil,
+    activity: String? = nil,
+    approval: String? = nil,
     subagents: [String] = [],
-    prompt: String? = nil,
-    promptSource: PromptSource? = nil
+    needsAttention: Bool = false,
+    updatedAt: Date = Date()
   ) {
-    self.agent = agent
-    self.status = status
+    self.source = source
+    self.phase = phase
     self.permissionMode = permissionMode
-    self.attention = attention
-    self.waitReason = waitReason
-    self.sessionId = sessionId
+    self.sessionID = sessionID
+    self.turnID = turnID
+    self.cwd = cwd
+    self.model = model
+    self.question = question
+    self.response = response
+    self.activity = activity
+    self.approval = approval
     self.subagents = subagents
-    self.prompt = prompt
-    self.promptSource = promptSource
+    self.needsAttention = needsAttention
+    self.updatedAt = updatedAt
   }
 
-  var needsAttention: Bool { attention == "notification" }
-
-  /// Trimmed prompt with leading/trailing whitespace removed; newlines kept
-  /// for multi-line rendering (SwiftUI `Text` wraps them naturally).
-  var promptDisplay: String? {
-    guard let prompt else { return nil }
-    let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
-  }
-
-  /// Mirrors hiroppy's `PermissionMode::badge()` mapping. Returns nil for
-  /// the default mode (no badge shown).
   var permissionBadge: PermissionBadge? {
     guard let mode = permissionMode, !mode.isEmpty else { return nil }
     switch mode {
@@ -211,48 +205,7 @@ struct AgentRuntime: Hashable, Sendable {
     }
   }
 
-  /// Human-readable wait reason mirroring hiroppy's `wait_reason_label`.
-  var waitReasonLabel: String? {
-    guard let raw = waitReason, !raw.isEmpty else { return nil }
-    switch raw {
-    case "permission_prompt":       return "permission required"
-    case "idle_prompt":              return "waiting for input"
-    case "auth_success":             return "auth success"
-    case "elicitation_dialog":       return "waiting for selection"
-    case "rate_limit":               return "rate limit"
-    case "permission_denied":        return "permission denied"
-    case "session_resumed":          return "resumed"
-    case "session_resumed_compact":  return "resumed (compact)"
-    default:
-      if let rest = raw.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init).asTeammateIdlePayload() {
-        return rest
-      }
-      return raw
-    }
-  }
-
-  /// Maps the hook-reported agent name onto our `DetectedAgent` enum for icon reuse.
-  var detectedAgent: DetectedAgent? {
-    switch agent {
-    case "claude": .claudeCode
-    case "codex": .codex
-    default: nil
-    }
-  }
-}
-
-private extension Array where Element == String {
-  /// Parses a `teammate_idle:Name[:Why]` split into a friendly label.
-  /// Returns nil when the head is not `teammate_idle`.
-  func asTeammateIdlePayload() -> String? {
-    guard count >= 2, self[0] == "teammate_idle" else { return nil }
-    let rest = self[1]
-    let parts = rest.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
-    if parts.count == 2, !parts[1].isEmpty {
-      return "\(parts[0]) idle (\(parts[1]))"
-    }
-    return "\(rest) idle"
-  }
+  var detectedAgent: DetectedAgent { source.detectedAgent }
 }
 
 // MARK: - Agent Detection

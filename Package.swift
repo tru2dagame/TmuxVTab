@@ -12,5 +12,10 @@ let package = Package(
         .swiftLanguageMode(.v6),
       ]
     ),
+    .testTarget(
+      name: "TmuxVTabTests",
+      dependencies: ["TmuxVTab"],
+      path: "Tests"
+    ),
   ]
 )

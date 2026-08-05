@@ -55,7 +55,6 @@ struct WindowRowView: View {
         subtitle
 
         if let runtime = window.agentRuntime {
-          // Subagents (hiroppy uses ├ / └ tree connectors, teal text)
           if !runtime.subagents.isEmpty {
             ForEach(Array(runtime.subagents.enumerated()), id: \.offset) { idx, name in
               Text("\(idx == runtime.subagents.count - 1 ? "└" : "├") \(name)")
@@ -66,20 +65,24 @@ struct WindowRowView: View {
             }
           }
 
-          // Wait reason
-          if let label = runtime.waitReasonLabel {
-            Text(label)
-              .scaledFont(size: 10, design: .monospaced)
-              .foregroundStyle(runtime.status == .error ? ThemeColor.statusError : ThemeColor.waitReason)
-              .lineLimit(1)
-              .truncationMode(.tail)
+          if let question = runtime.question {
+            previewBlock(question, marker: "›", color: ThemeColor.textMuted)
           }
 
-          // Prompt: multi-line wrapped, up to 3 lines.
-          // Responses get a leading cyan `▷` arrow on the first line (hiroppy convention).
-          if let preview = runtime.promptDisplay {
-            promptBlock(preview, isResponse: runtime.promptSource == .response)
-          } else if runtime.status == .idle {
+          if runtime.phase == .waitingForApproval, let approval = runtime.approval {
+            previewBlock(approval, marker: "!", color: ThemeColor.statusWaiting)
+          } else if let activity = runtime.activity {
+            previewBlock(
+              activity,
+              marker: runtime.phase == .error ? "×" : "·",
+              color: runtime.phase == .error ? ThemeColor.statusError : ThemeColor.taskProgress,
+              lineLimit: 1
+            )
+          }
+
+          if let response = runtime.response {
+            previewBlock(response, marker: "✓", color: ThemeColor.responseArrow)
+          } else if runtime.phase == .idle {
             Text("Waiting for prompt…")
               .scaledFont(size: 10, design: .monospaced)
               .foregroundStyle(window.isActive ? ThemeColor.textActive : ThemeColor.textInactive)
@@ -94,7 +97,7 @@ struct WindowRowView: View {
       Group {
         if let runtime = window.agentRuntime, runtime.needsAttention {
           Circle().fill(.orange).frame(width: 7, height: 7)
-        } else if let runtime = window.agentRuntime, let color = statusDotColor(runtime.status) {
+        } else if let runtime = window.agentRuntime, let color = statusDotColor(runtime.phase) {
           Circle().fill(color).frame(width: 7, height: 7)
         } else if window.isActive {
           Circle().fill(.green).frame(width: 7, height: 7)
@@ -156,28 +159,23 @@ struct WindowRowView: View {
       .fixedSize()
   }
 
-  /// Renders the prompt block. For responses, the first line is prefixed with
-  /// a cyan ▷ arrow; the rest wraps under the body indent. For user prompts
-  /// the body is plain, with a 2-character leading gutter to match hiroppy.
   @ViewBuilder
-  private func promptBlock(_ text: String, isResponse: Bool) -> some View {
+  private func previewBlock(
+    _ text: String,
+    marker: String,
+    color: Color,
+    lineLimit: Int = 2
+  ) -> some View {
     HStack(alignment: .top, spacing: 4) {
-      if isResponse {
-        Text("▷")
-          .scaledFont(size: 10, weight: .bold, design: .monospaced)
-          .foregroundStyle(ThemeColor.responseArrow)
-          .padding(.top, 1)
-      } else {
-        // Empty gutter that visually matches the response arrow column width
-        // so user prompts line up with response continuation lines.
-        Text(" ")
-          .scaledFont(size: 10, design: .monospaced)
-          .frame(width: 8)
-      }
+      Text(marker)
+        .scaledFont(size: 10, weight: .bold, design: .monospaced)
+        .foregroundStyle(color)
+        .frame(width: 8)
+        .padding(.top, 1)
       Text(text)
         .scaledFont(size: 10, design: .monospaced)
         .foregroundStyle(window.isActive ? ThemeColor.textActive : ThemeColor.textInactive)
-        .lineLimit(3)
+        .lineLimit(lineLimit)
         .truncationMode(.tail)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -185,44 +183,41 @@ struct WindowRowView: View {
   }
 
   private func runtimeSubtitle(_ runtime: AgentRuntime) -> String {
-    let label = runtime.detectedAgent?.label ?? runtime.agent.capitalized
-    return "\(label) · \(runtime.status.rawValue)"
+    "\(runtime.detectedAgent.label) · \(runtime.phase.label)"
   }
 
   private func runtimeSubtitleColor(_ runtime: AgentRuntime) -> Color {
-    switch runtime.status {
+    switch runtime.phase {
     case .error: return ThemeColor.statusError
-    case .waiting: return ThemeColor.statusWaiting
+    case .waitingForApproval: return ThemeColor.statusWaiting
     case .running: return effectiveAgent.map { agentColor($0) } ?? ThemeColor.statusRunning
-    case .background: return ThemeColor.statusBg
-    case .idle: return ThemeColor.statusIdle
+    case .complete, .idle: return ThemeColor.statusIdle
     case .unknown: return ThemeColor.statusUnknown
     }
   }
 
-  private func statusDotColor(_ status: PaneStatus) -> Color? {
-    switch status {
+  private func statusDotColor(_ phase: AgentPhase) -> Color? {
+    switch phase {
     case .running: return ThemeColor.statusRunning
-    case .waiting: return ThemeColor.statusWaiting
+    case .waitingForApproval: return ThemeColor.statusWaiting
     case .error: return ThemeColor.statusError
-    case .background: return ThemeColor.statusBg
+    case .complete: return ThemeColor.statusIdle
     case .idle, .unknown: return nil
     }
   }
 
   private var isPulsing: Bool {
     guard let runtime = window.agentRuntime else { return true }
-    return runtime.status == .running || runtime.needsAttention
+    return runtime.phase == .running || runtime.needsAttention
   }
 
   private func iconForeground(agent: DetectedAgent) -> Color {
     if let runtime = window.agentRuntime {
       if runtime.needsAttention { return .orange }
-      switch runtime.status {
+      switch runtime.phase {
       case .error: return ThemeColor.statusError
-      case .waiting: return ThemeColor.statusWaiting
-      case .idle: return ThemeColor.statusIdle
-      case .background: return ThemeColor.statusBg
+      case .waitingForApproval: return ThemeColor.statusWaiting
+      case .complete, .idle: return ThemeColor.statusIdle
       case .running, .unknown: break
       }
     }

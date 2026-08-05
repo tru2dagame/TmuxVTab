@@ -4,7 +4,9 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unchecked Sendable {
   private var panel: FloatingPanel?
-  private let tmuxService = TmuxService()
+  private let agentStore: AgentStateStore
+  private let tmuxService: TmuxService
+  private var agentEventServer: AgentEventServer?
   private let ghosttyMonitor = GhosttyMonitor()
   private var runningObservation: Any?
   private var frameObservation: Any?
@@ -18,9 +20,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
   private var alwaysOnTop: Bool = false
   private var floatMode: Bool = false
 
+  override init() {
+    let store = AgentStateStore()
+    self.agentStore = store
+    self.tmuxService = TmuxService(agentStore: store)
+    super.init()
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     loadSettings()
     setupSignalHandler()
+    startAgentEventServer()
     ghosttyMonitor.start()
     createPanel()
     observeGhosttyState()
@@ -35,6 +45,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, @unc
 
   func applicationWillTerminate(_ notification: Notification) {
     tmuxService.stopPolling()
+    agentEventServer?.stop()
+  }
+
+  private func startAgentEventServer() {
+    let store = agentStore
+    let service = tmuxService
+    let server = AgentEventServer { event in
+      Task { @MainActor in
+        store.apply(event)
+        service.applyAgentRuntime(for: event.paneID)
+      }
+    }
+    do {
+      try server.start()
+      agentEventServer = server
+    } catch {
+      fputs("[TmuxVTab] Agent event socket failed: \(error)\n", stderr)
+    }
   }
 
   // Close button terminates the app immediately

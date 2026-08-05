@@ -9,8 +9,10 @@ final class TmuxService {
 
   private var pollingTask: Task<Void, Never>?
   private let tmuxPath: String?
+  private let agentStore: AgentStateStore
 
-  init() {
+  init(agentStore: AgentStateStore) {
+    self.agentStore = agentStore
     self.tmuxPath = Self.findTmux()
     if let tmuxPath {
       log("Found tmux at: \(tmuxPath)")
@@ -56,6 +58,15 @@ final class TmuxService {
       var newSessions = try await fetchSessions(tmuxPath: tmuxPath)
       log("Got \(newSessions.count) sessions")
 
+      // Merge structured local hook state by tmux pane id. This is independent
+      // of tmux options and does not scrape terminal output or transcripts.
+      for i in newSessions.indices {
+        for j in newSessions[i].windows.indices {
+          let paneID = newSessions[i].windows[j].paneId
+          newSessions[i].windows[j].agentRuntime = agentStore.runtime(for: paneID)
+        }
+      }
+
       // Detect agents for windows with running tasks (one ps call for all)
       let allWindows = newSessions.flatMap(\.windows)
       let runningPids = allWindows.filter(\.isRunningTask).map(\.panePid).filter { $0 > 0 }
@@ -68,26 +79,6 @@ final class TmuxService {
             if let agent = agentMap[pid] {
               newSessions[i].windows[j].detectedAgent = agent
             }
-          }
-        }
-      }
-
-      // For panes that have hook-driven agent state, pull the latest prompt
-      // out-of-band. We use show-options instead of the bulk list-windows
-      // format because prompt text can contain newlines.
-      let agentPaneIds = allWindows.compactMap { window in
-        window.agentRuntime != nil && !window.paneId.isEmpty ? window.paneId : nil
-      }
-      if !agentPaneIds.isEmpty {
-        let promptMap = await fetchPanePrompts(tmuxPath: tmuxPath, paneIds: agentPaneIds)
-        for i in newSessions.indices {
-          for j in newSessions[i].windows.indices {
-            let paneId = newSessions[i].windows[j].paneId
-            guard var runtime = newSessions[i].windows[j].agentRuntime,
-                  let entry = promptMap[paneId] else { continue }
-            runtime.prompt = entry.prompt
-            runtime.promptSource = entry.source
-            newSessions[i].windows[j].agentRuntime = runtime
           }
         }
       }
@@ -110,9 +101,7 @@ final class TmuxService {
 
   // MARK: - Pane Navigation
 
-  /// Jumps the attached tmux client to the given window, then activates
-  /// Ghostty so the user immediately sees the result. Mirrors
-  /// `tmux-agent-sidebar::select_pane`: switch-client → select-window → select-pane.
+  /// Jumps the attached tmux client to the given pane, then activates Ghostty.
   func jumpTo(window: TmuxWindow) async {
     guard let tmuxPath else { return }
     let target = "\(window.sessionName):\(window.windowIndex)"
@@ -127,6 +116,23 @@ final class TmuxService {
     // Refresh once promptly so the active window indicator updates without
     // waiting for the next 3s poll tick.
     await refresh()
+  }
+
+  /// Applies a just-received hook update without waiting for the next tmux poll.
+  func applyAgentRuntime(for paneID: String) {
+    let runtime = agentStore.runtime(for: paneID)
+    var updated = sessions
+    var changed = false
+    for i in updated.indices {
+      for j in updated[i].windows.indices where updated[i].windows[j].paneId == paneID {
+        updated[i].windows[j].agentRuntime = runtime
+        if let detected = runtime?.detectedAgent {
+          updated[i].windows[j].detectedAgent = detected
+        }
+        changed = true
+      }
+    }
+    if changed { sessions = updated }
   }
 
   private func activateGhostty() {
@@ -161,14 +167,11 @@ final class TmuxService {
   }
 
   private func fetchWindows(tmuxPath: String, sessionName: String) async throws -> [TmuxWindow] {
-    // Fields 6–13 are tmux-agent-sidebar hook-written pane options. They resolve
-    // against the window's active pane and are empty strings when the plugin is
-    // not installed or hasn't fired an event for that pane yet.
     let output = try await run(
       tmuxPath,
       arguments: [
         "list-windows", "-t", sessionName, "-F",
-        "#{window_index}\t#{window_name}\t#{window_active}\t#{window_bell_flag}\t#{pane_current_command}\t#{pane_pid}\t#{pane_id}\t#{@pane_agent}\t#{@pane_status}\t#{@pane_permission_mode}\t#{@pane_attention}\t#{@pane_wait_reason}\t#{@pane_session_id}\t#{@pane_subagents}",
+        "#{window_index}\t#{window_name}\t#{window_active}\t#{window_bell_flag}\t#{pane_current_command}\t#{pane_pid}\t#{pane_id}",
       ]
     )
     let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -180,24 +183,6 @@ final class TmuxService {
       let panePid = Int(String(parts[5])) ?? 0
       let paneId = String(parts[6])
 
-      let agentName = parts.count > 7 ? String(parts[7]) : ""
-      let subagentsRaw = nonEmpty(parts, 13) ?? ""
-      let subagents = subagentsRaw
-        .split(separator: ",", omittingEmptySubsequences: true)
-        .map { $0.trimmingCharacters(in: .whitespaces) }
-        .filter { !$0.isEmpty }
-      let runtime: AgentRuntime? = agentName.isEmpty
-        ? nil
-        : AgentRuntime(
-            agent: agentName,
-            status: PaneStatus(raw: parts.count > 8 ? String(parts[8]) : ""),
-            permissionMode: nonEmpty(parts, 9),
-            attention: nonEmpty(parts, 10),
-            waitReason: nonEmpty(parts, 11),
-            sessionId: nonEmpty(parts, 12),
-            subagents: subagents
-          )
-
       return TmuxWindow(
         sessionName: sessionName,
         windowIndex: windowIndex,
@@ -206,56 +191,9 @@ final class TmuxService {
         hasBell: String(parts[3]) == "1",
         currentCommand: String(parts[4]),
         panePid: panePid,
-        paneId: paneId,
-        agentRuntime: runtime
+        paneId: paneId
       )
     }
-  }
-
-  // MARK: - Prompt Fetching
-
-  /// Fetches `@pane_prompt` + `@pane_prompt_source` for the given panes
-  /// concurrently. Each value comes from its own `tmux show-options -v`
-  /// call so multi-line prompts round-trip safely.
-  private func fetchPanePrompts(
-    tmuxPath: String,
-    paneIds: [String]
-  ) async -> [String: (prompt: String?, source: PromptSource?)] {
-    await withTaskGroup(of: (String, String?, PromptSource?).self) { group in
-      for paneId in paneIds {
-        group.addTask { [self] in
-          async let promptRaw = self.readPaneOption(tmuxPath: tmuxPath, paneId: paneId, option: "@pane_prompt")
-          async let sourceRaw = self.readPaneOption(tmuxPath: tmuxPath, paneId: paneId, option: "@pane_prompt_source")
-          let prompt = await promptRaw
-          let source = await sourceRaw.flatMap(PromptSource.init(rawValue:))
-          return (paneId, prompt, source)
-        }
-      }
-      var result: [String: (prompt: String?, source: PromptSource?)] = [:]
-      for await (paneId, prompt, source) in group {
-        result[paneId] = (prompt, source)
-      }
-      return result
-    }
-  }
-
-  /// Returns the raw value of a per-pane tmux option, or nil when unset/missing.
-  private func readPaneOption(tmuxPath: String, paneId: String, option: String) async -> String? {
-    guard let raw = try? await run(tmuxPath, arguments: ["show-options", "-p", "-v", "-t", paneId, option]) else {
-      return nil
-    }
-    // `show-options -v` always appends a trailing newline; strip exactly one
-    // to preserve any newlines that are part of the value itself.
-    var trimmed = raw
-    if trimmed.hasSuffix("\n") { trimmed.removeLast() }
-    if trimmed.hasSuffix("\r") { trimmed.removeLast() }
-    return trimmed.isEmpty ? nil : trimmed
-  }
-
-  private func nonEmpty(_ parts: [Substring], _ index: Int) -> String? {
-    guard index < parts.count else { return nil }
-    let s = String(parts[index])
-    return s.isEmpty ? nil : s
   }
 
   // MARK: - Agent Detection
