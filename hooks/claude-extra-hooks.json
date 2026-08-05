@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" claude notification",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" claude notification",
             "timeout": 3
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" claude stop-failure",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" claude stop-failure",
             "timeout": 3
           }
         ]

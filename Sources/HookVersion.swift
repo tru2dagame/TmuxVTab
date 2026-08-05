@@ -8,7 +8,7 @@ enum HookCompatibility: String, Codable, Hashable, Sendable {
 }
 
 enum HookVersion {
-  static let current = "0.3.0"
+  static let current = "0.3.1"
 
   static func compatibility(with installedVersion: String?) -> HookCompatibility {
     guard let installedVersion,

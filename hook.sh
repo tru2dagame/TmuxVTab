@@ -1,15 +1,22 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Fast, fail-open adapter for Claude Code and Codex lifecycle hooks.
 # The TmuxVTab executable normalizes stdin and writes one bounded event to the
 # private Unix socket owned by the running TmuxVTab app.
 
 AGENT="${1:-auto}"
 EVENT="${2:-}"
-PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if [[ "$SCRIPT_PATH" != /* ]]; then
+  SCRIPT_PATH="$PWD/$SCRIPT_PATH"
+fi
+PLUGIN_DIR="${SCRIPT_PATH%/*}"
+PLUGIN_DIR="$(cd "$PLUGIN_DIR" && pwd -P)" || exit 0
 HOOK_VERSION_FILE="$PLUGIN_DIR/hooks/VERSION"
 HOOK_VERSION="unknown"
 if [[ -f "$HOOK_VERSION_FILE" ]]; then
-  HOOK_VERSION="$(tr -d '[:space:]' < "$HOOK_VERSION_FILE")"
+  IFS= read -r HOOK_VERSION < "$HOOK_VERSION_FILE" || true
+  HOOK_VERSION="${HOOK_VERSION#"${HOOK_VERSION%%[![:space:]]*}"}"
+  HOOK_VERSION="${HOOK_VERSION%"${HOOK_VERSION##*[![:space:]]}"}"
 fi
 
 if [[ "$AGENT" == "--version" || "$AGENT" == "version" ]]; then

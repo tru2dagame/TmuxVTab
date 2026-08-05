@@ -28,4 +28,27 @@ struct HookVersionTests {
       #expect(object["version"] as? String == HookVersion.current)
     }
   }
+
+  @Test func hookVersionDoesNotDependOnPathLookup() throws {
+    let root = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let process = Process()
+    let standardOutput = Pipe()
+    let standardError = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/bin/bash")
+    process.arguments = [root.appendingPathComponent("hook.sh").path, "--version"]
+    process.environment = ["HOME": NSHomeDirectory(), "PATH": ""]
+    process.standardOutput = standardOutput
+    process.standardError = standardError
+
+    try process.run()
+    let output = standardOutput.fileHandleForReading.readDataToEndOfFile()
+    let error = standardError.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+
+    #expect(process.terminationStatus == 0)
+    #expect(String(decoding: output, as: UTF8.self) == "\(HookVersion.current)\n")
+    #expect(error.isEmpty)
+  }
 }

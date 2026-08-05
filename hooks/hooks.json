@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto session-start",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto session-start",
             "timeout": 3
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto session-end",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto session-end",
             "timeout": 1
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto user-prompt-submit",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto user-prompt-submit",
             "timeout": 3
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto permission-request",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto permission-request",
             "timeout": 3
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto post-tool-use",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto post-tool-use",
             "timeout": 3
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto subagent-start",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto subagent-start",
             "timeout": 3
           }
         ]
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto subagent-stop",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto subagent-stop",
             "timeout": 3
           }
         ]
@@ -84,7 +84,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto stop",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/hook.sh\" auto stop",
             "timeout": 3
           }
         ]
