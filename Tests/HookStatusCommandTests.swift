@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TmuxVTab
 
@@ -25,5 +26,27 @@ struct HookStatusCommandTests {
     #expect(report.contains("Update local Codex marketplace: /path/to/tmuxvtab"))
     #expect(report.contains("codex plugin add tmuxvtab@tru2dagame --json"))
     #expect(!report.contains("codex plugin marketplace upgrade"))
+  }
+
+  @Test func commandInspectionDoesNotInheritTerminalInput() throws {
+    let output = try #require(HookStatusCommand.run(
+      URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "if read ignored; then exit 9; fi; printf done"],
+      timeout: 1
+    ))
+
+    #expect(String(decoding: output, as: UTF8.self) == "done")
+  }
+
+  @Test func commandInspectionTimesOut() {
+    let startedAt = Date()
+    let output = HookStatusCommand.run(
+      URL(fileURLWithPath: "/bin/sleep"),
+      arguments: ["2"],
+      timeout: 0.05
+    )
+
+    #expect(output == nil)
+    #expect(Date().timeIntervalSince(startedAt) < 1)
   }
 }

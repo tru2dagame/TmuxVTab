@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 enum HookStatusCommand {
   struct Installation: Sendable {
@@ -167,17 +168,34 @@ enum HookStatusCommand {
       .first { FileManager.default.isExecutableFile(atPath: $0.path) }
   }
 
-  private static func run(_ executable: URL, arguments: [String]) -> Data? {
+  static func run(
+    _ executable: URL,
+    arguments: [String],
+    timeout: TimeInterval = 10
+  ) -> Data? {
     let process = Process()
     let output = Pipe()
+    let completion = DispatchSemaphore(value: 0)
     process.executableURL = executable
     process.arguments = arguments
+    process.standardInput = FileHandle.nullDevice
     process.standardOutput = output
     process.standardError = FileHandle.nullDevice
+    process.terminationHandler = { _ in completion.signal() }
     do {
       try process.run()
+      let deadline = DispatchTime.now() + .milliseconds(max(1, Int(timeout * 1_000)))
+      guard completion.wait(timeout: deadline) == .success else {
+        let processID = process.processIdentifier
+        process.terminate()
+        if completion.wait(timeout: .now() + .milliseconds(250)) == .timedOut {
+          Darwin.kill(processID, SIGKILL)
+          _ = completion.wait(timeout: .now() + .seconds(1))
+        }
+        return nil
+      }
+
       let data = output.fileHandleForReading.readDataToEndOfFile()
-      process.waitUntilExit()
       return process.terminationStatus == 0 ? data : nil
     } catch {
       return nil
