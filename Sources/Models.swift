@@ -49,6 +49,18 @@ struct TmuxSession: Identifiable, Hashable, Sendable {
   }
 }
 
+struct TmuxPane: Hashable, Sendable {
+  let id: String
+  let pid: Int
+  let currentCommand: String
+  let isActive: Bool
+
+  var isRunningTask: Bool {
+    let shells: Set<String> = ["zsh", "bash", "fish", "sh", "dash", "tcsh", "ksh", "nu", "elvish"]
+    return !shells.contains(currentCommand)
+  }
+}
+
 struct TmuxWindow: Identifiable, Hashable, Sendable {
   let id: String
   let sessionName: String
@@ -59,6 +71,7 @@ struct TmuxWindow: Identifiable, Hashable, Sendable {
   let currentCommand: String
   let panePid: Int
   let paneId: String
+  let panes: [TmuxPane]
   /// Detected coding agent running in this window (e.g., "Claude Code", "Codex").
   var detectedAgent: DetectedAgent?
   /// Live agent runtime sourced from TmuxVTab's local hook event socket.
@@ -86,6 +99,7 @@ struct TmuxWindow: Identifiable, Hashable, Sendable {
     currentCommand: String = "",
     panePid: Int = 0,
     paneId: String = "",
+    panes: [TmuxPane]? = nil,
     detectedAgent: DetectedAgent? = nil,
     agentRuntime: AgentRuntime? = nil
   ) {
@@ -98,8 +112,31 @@ struct TmuxWindow: Identifiable, Hashable, Sendable {
     self.currentCommand = currentCommand
     self.panePid = panePid
     self.paneId = paneId
+    self.panes = panes ?? (paneId.isEmpty ? [] : [
+      TmuxPane(id: paneId, pid: panePid, currentCommand: currentCommand, isActive: true)
+    ])
     self.detectedAgent = detectedAgent
     self.agentRuntime = agentRuntime
+  }
+
+  func selecting(
+    pane: TmuxPane,
+    runtime: AgentRuntime? = nil,
+    detectedAgent: DetectedAgent? = nil
+  ) -> TmuxWindow {
+    TmuxWindow(
+      sessionName: sessionName,
+      windowIndex: windowIndex,
+      windowName: windowName,
+      isActive: isActive,
+      hasBell: hasBell,
+      currentCommand: pane.currentCommand,
+      panePid: pane.pid,
+      paneId: pane.id,
+      panes: panes,
+      detectedAgent: detectedAgent ?? runtime?.detectedAgent,
+      agentRuntime: runtime
+    )
   }
 }
 

@@ -61,26 +61,38 @@ final class TmuxService {
       let newPreviewLineLimit = await configuredPreviewLineLimit
       log("Got \(newSessions.count) sessions")
 
-      // Merge structured local hook state by tmux pane id. This is independent
-      // of tmux options and does not scrape terminal output or transcripts.
+      // Merge structured local hook state from every pane in each window. The
+      // displayed pane is the one needing attention or most recently updated.
       for i in newSessions.indices {
         for j in newSessions[i].windows.indices {
-          let paneID = newSessions[i].windows[j].paneId
-          newSessions[i].windows[j].agentRuntime = agentStore.runtime(for: paneID)
+          let window = newSessions[i].windows[j]
+          if let selected = agentStore.preferredRuntime(for: window.panes) {
+            newSessions[i].windows[j] = window.selecting(
+              pane: selected.pane,
+              runtime: selected.runtime
+            )
+          }
         }
       }
 
-      // Detect agents for windows with running tasks (one ps call for all)
-      let allWindows = newSessions.flatMap(\.windows)
-      let runningPids = allWindows.filter(\.isRunningTask).map(\.panePid).filter { $0 > 0 }
+      // Detect agents in every pane (one ps call for all), not only the active
+      // pane represented by tmux's list-windows format.
+      let allPanes = newSessions.flatMap(\.windows).flatMap(\.panes)
+      let runningPids = allPanes.filter(\.isRunningTask).map(\.pid).filter { $0 > 0 }
 
       if !runningPids.isEmpty {
         let agentMap = await detectAgents(for: runningPids)
         for i in newSessions.indices {
           for j in newSessions[i].windows.indices {
-            let pid = newSessions[i].windows[j].panePid
-            if let agent = agentMap[pid] {
-              newSessions[i].windows[j].detectedAgent = agent
+            let window = newSessions[i].windows[j]
+            guard window.agentRuntime == nil else { continue }
+            let agentPanes = window.panes.filter { agentMap[$0.pid] != nil }
+            if let pane = agentPanes.first(where: \.isActive) ?? agentPanes.first,
+               let agent = agentMap[pane.pid] {
+              newSessions[i].windows[j] = window.selecting(
+                pane: pane,
+                detectedAgent: agent
+              )
             }
           }
         }
@@ -124,14 +136,19 @@ final class TmuxService {
 
   /// Applies a just-received hook update without waiting for the next tmux poll.
   func applyAgentRuntime(for paneID: String) {
-    let runtime = agentStore.runtime(for: paneID)
     var updated = sessions
     var changed = false
     for i in updated.indices {
-      for j in updated[i].windows.indices where updated[i].windows[j].paneId == paneID {
-        updated[i].windows[j].agentRuntime = runtime
-        if let detected = runtime?.detectedAgent {
-          updated[i].windows[j].detectedAgent = detected
+      for j in updated[i].windows.indices {
+        let window = updated[i].windows[j]
+        guard window.panes.contains(where: { $0.id == paneID }) else { continue }
+        if let selected = agentStore.preferredRuntime(for: window.panes) {
+          updated[i].windows[j] = window.selecting(
+            pane: selected.pane,
+            runtime: selected.runtime
+          )
+        } else if let activePane = window.panes.first(where: \.isActive) ?? window.panes.first {
+          updated[i].windows[j] = window.selecting(pane: activePane)
         }
         changed = true
       }
@@ -182,28 +199,60 @@ final class TmuxService {
     let output = try await run(
       tmuxPath,
       arguments: [
-        "list-windows", "-t", sessionName, "-F",
-        "#{window_index}\t#{window_name}\t#{window_active}\t#{window_bell_flag}\t#{pane_current_command}\t#{pane_pid}\t#{pane_id}",
+        "list-panes", "-s", "-t", "\(sessionName):", "-F",
+        "#{window_index}\t#{window_name}\t#{window_active}\t#{window_bell_flag}\t#{pane_active}\t#{pane_current_command}\t#{pane_pid}\t#{pane_id}",
       ]
     )
+    return Self.parseWindows(output, sessionName: sessionName)
+  }
+
+  static func parseWindows(_ output: String, sessionName: String) -> [TmuxWindow] {
     let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return [] }
 
-    return trimmed.split(whereSeparator: \.isNewline).compactMap { line in
-      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
-      guard parts.count >= 7, let windowIndex = Int(String(parts[0])) else { return nil }
-      let panePid = Int(String(parts[5])) ?? 0
-      let paneId = String(parts[6])
+    struct WindowGroup {
+      let windowName: String
+      let isActive: Bool
+      let hasBell: Bool
+      var panes: [TmuxPane]
+    }
 
+    var groups: [Int: WindowGroup] = [:]
+    for line in trimmed.split(whereSeparator: \.isNewline) {
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count >= 8, let windowIndex = Int(String(parts[0])) else { continue }
+      let pane = TmuxPane(
+        id: String(parts[7]),
+        pid: Int(String(parts[6])) ?? 0,
+        currentCommand: String(parts[5]),
+        isActive: String(parts[4]) == "1"
+      )
+
+      if groups[windowIndex] == nil {
+        groups[windowIndex] = WindowGroup(
+          windowName: String(parts[1]),
+          isActive: String(parts[2]) == "1",
+          hasBell: String(parts[3]) == "1",
+          panes: []
+        )
+      }
+      groups[windowIndex]?.panes.append(pane)
+    }
+
+    return groups.keys.sorted().compactMap { windowIndex in
+      guard let group = groups[windowIndex],
+            let pane = group.panes.first(where: \.isActive) ?? group.panes.first
+      else { return nil }
       return TmuxWindow(
         sessionName: sessionName,
         windowIndex: windowIndex,
-        windowName: String(parts[1]),
-        isActive: String(parts[2]) == "1",
-        hasBell: String(parts[3]) == "1",
-        currentCommand: String(parts[4]),
-        panePid: panePid,
-        paneId: paneId
+        windowName: group.windowName,
+        isActive: group.isActive,
+        hasBell: group.hasBell,
+        currentCommand: pane.currentCommand,
+        panePid: pane.pid,
+        paneId: pane.id,
+        panes: group.panes
       )
     }
   }

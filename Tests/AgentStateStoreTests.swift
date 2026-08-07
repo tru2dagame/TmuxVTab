@@ -54,9 +54,23 @@ struct AgentStateStoreTests {
     #expect(store.runtime(for: "%1") == nil)
   }
 
+  @Test func selectsAnInactivePaneWithAgentState() throws {
+    let store = AgentStateStore(persistenceURL: nil)
+    store.apply(event(.userPrompt, paneID: "%agent", prompt: "Keep working"))
+
+    let panes = [
+      TmuxPane(id: "%shell", pid: 10, currentCommand: "zsh", isActive: true),
+      TmuxPane(id: "%agent", pid: 11, currentCommand: "codex", isActive: false),
+    ]
+    let selected = try #require(store.preferredRuntime(for: panes))
+    #expect(selected.pane.id == "%agent")
+    #expect(selected.runtime.question == "Keep working")
+  }
+
   private func event(
     _ kind: AgentEventKind,
     sessionID: String = "session",
+    paneID: String = "%1",
     prompt: String? = nil,
     response: String? = nil,
     detail: String? = nil,
@@ -67,7 +81,7 @@ struct AgentStateStoreTests {
       kind: kind,
       sessionID: sessionID,
       hookVersion: hookVersion,
-      paneID: "%1",
+      paneID: paneID,
       prompt: prompt,
       response: response,
       detail: detail

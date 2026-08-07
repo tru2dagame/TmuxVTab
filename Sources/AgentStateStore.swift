@@ -22,6 +22,20 @@ final class AgentStateStore {
     runtimesByPane[paneID]
   }
 
+  func preferredRuntime(for panes: [TmuxPane]) -> (pane: TmuxPane, runtime: AgentRuntime)? {
+    panes.compactMap { pane in
+      runtime(for: pane.id).map { (pane: pane, runtime: $0) }
+    }.max { lhs, rhs in
+      if lhs.runtime.needsAttention != rhs.runtime.needsAttention {
+        return !lhs.runtime.needsAttention
+      }
+      if lhs.runtime.updatedAt != rhs.runtime.updatedAt {
+        return lhs.runtime.updatedAt < rhs.runtime.updatedAt
+      }
+      return !lhs.pane.isActive && rhs.pane.isActive
+    }
+  }
+
   func apply(_ event: AgentEvent) {
     guard event.version == AgentEvent.protocolVersion, !event.paneID.isEmpty else { return }
 
