@@ -102,6 +102,11 @@ final class AgentStateStore {
       runtime.activity = nil
       runtime.approval = nil
       runtime.needsAttention = true
+    case .idle:
+      runtime.phase = .idle
+      runtime.activity = nil
+      runtime.approval = nil
+      runtime.needsAttention = true
     case .failed:
       runtime.phase = .error
       runtime.activity = event.detail

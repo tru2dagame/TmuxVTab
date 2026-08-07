@@ -67,6 +67,18 @@ struct AgentStateStoreTests {
     #expect(selected.runtime.question == "Keep working")
   }
 
+  @Test func idleEventClearsAStaleWorkingPhase() throws {
+    let store = AgentStateStore(persistenceURL: nil)
+    store.apply(event(.userPrompt, prompt: "Do the work"))
+    store.apply(event(.activity, detail: "Bash"))
+    store.apply(event(.idle, detail: "Waiting for input"))
+
+    let runtime = try #require(store.runtime(for: "%1"))
+    #expect(runtime.phase == .idle)
+    #expect(runtime.activity == nil)
+    #expect(runtime.needsAttention)
+  }
+
   private func event(
     _ kind: AgentEventKind,
     sessionID: String = "session",

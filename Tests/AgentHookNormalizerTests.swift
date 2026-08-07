@@ -83,6 +83,40 @@ struct AgentHookNormalizerTests {
     #expect(event.detail?.contains("must-not-be-copied") == false)
   }
 
+  @Test func mapsClaudeIdleAndInputNotificationsToNonWorkingStates() throws {
+    let idle = try #require(AgentHookNormalizer.normalize(
+      agentHint: "claude",
+      eventHint: "notification",
+      input: Data("""
+        {
+          "session_id": "claude-session",
+          "hook_event_name": "Notification",
+          "notification_type": "idle_prompt",
+          "message": "Claude is waiting for input"
+        }
+        """.utf8),
+      environment: ["TMUX_PANE": "%5"]
+    ))
+    #expect(idle.kind == .idle)
+    #expect(idle.detail == "Claude is waiting for input")
+
+    let needsInput = try #require(AgentHookNormalizer.normalize(
+      agentHint: "claude",
+      eventHint: "notification",
+      input: Data("""
+        {
+          "session_id": "claude-session",
+          "hook_event_name": "Notification",
+          "notification_type": "agent_needs_input",
+          "message": "A background agent needs input"
+        }
+        """.utf8),
+      environment: ["TMUX_PANE": "%5"]
+    ))
+    #expect(needsInput.kind == .approvalRequired)
+    #expect(needsInput.detail == "A background agent needs input")
+  }
+
   @Test func requiresTmuxPaneAndBoundsPreviewText() throws {
     let longPrompt = String(repeating: "a", count: AgentHookNormalizer.maximumPromptLength + 20)
     let input = try JSONSerialization.data(withJSONObject: [

@@ -18,6 +18,7 @@ enum AgentEventKind: String, Codable, Hashable, Sendable {
   case activity
   case approvalRequired
   case completed
+  case idle
   case failed
   case notification
   case subagentStarted
@@ -108,7 +109,8 @@ enum AgentHookNormalizer {
     else { return nil }
 
     let rawEvent = (payload["hook_event_name"] as? String) ?? eventHint
-    guard let kind = eventKind(rawEvent) else { return nil }
+    guard let baseKind = eventKind(rawEvent) else { return nil }
+    let kind = refinedKind(baseKind, payload: payload)
 
     let sessionID = bounded(payload["session_id"] as? String, maximumMetadataLength) ?? "unknown"
     let toolInput = payload["tool_input"] as? [String: Any]
@@ -141,7 +143,7 @@ enum AgentHookNormalizer {
         ),
         maximumDetailLength
       )
-    case .notification:
+    case .notification, .idle:
       detail = bounded(payload["message"] as? String, maximumDetailLength)
     default:
       detail = nil
@@ -184,6 +186,24 @@ enum AgentHookNormalizer {
     case "subagentstop": .subagentStopped
     case "sessionend": .sessionEnded
     default: nil
+    }
+  }
+
+  private static func refinedKind(
+    _ kind: AgentEventKind,
+    payload: [String: Any]
+  ) -> AgentEventKind {
+    guard kind == .notification,
+          let notificationType = payload["notification_type"] as? String
+    else { return kind }
+
+    switch notificationType.lowercased() {
+    case "idle_prompt":
+      return .idle
+    case "permission_prompt", "agent_needs_input":
+      return .approvalRequired
+    default:
+      return kind
     }
   }
 
