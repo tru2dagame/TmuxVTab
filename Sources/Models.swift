@@ -187,6 +187,7 @@ struct AgentRuntime: Codable, Hashable, Sendable {
   var permissionMode: String?
   var sessionID: String
   var turnID: String?
+  var transcriptPath: String?
   var cwd: String?
   var model: String?
   var question: String?
@@ -204,6 +205,7 @@ struct AgentRuntime: Codable, Hashable, Sendable {
     permissionMode: String? = nil,
     sessionID: String,
     turnID: String? = nil,
+    transcriptPath: String? = nil,
     cwd: String? = nil,
     model: String? = nil,
     question: String? = nil,
@@ -220,6 +222,7 @@ struct AgentRuntime: Codable, Hashable, Sendable {
     self.permissionMode = permissionMode
     self.sessionID = sessionID
     self.turnID = turnID
+    self.transcriptPath = transcriptPath
     self.cwd = cwd
     self.model = model
     self.question = question

@@ -61,6 +61,15 @@ final class TmuxService {
       let newPreviewLineLimit = await configuredPreviewLineLimit
       log("Got \(newSessions.count) sessions")
 
+      // Codex normally sends Stop. If a turn misses that hook, reconcile only
+      // the matching task_complete metadata from the bounded rollout tail.
+      let allPanes = newSessions.flatMap(\.windows).flatMap(\.panes)
+      let completionCandidates = agentStore.runningCodexTurns(for: allPanes)
+      let completions = await CodexTurnCompletionDetector.detect(completionCandidates)
+      for completion in completions {
+        agentStore.markCodexTurnComplete(completion)
+      }
+
       // Merge structured local hook state from every pane in each window. The
       // displayed pane is the one needing attention or most recently updated.
       for i in newSessions.indices {
@@ -77,7 +86,6 @@ final class TmuxService {
 
       // Detect agents in every pane (one ps call for all), not only the active
       // pane represented by tmux's list-windows format.
-      let allPanes = newSessions.flatMap(\.windows).flatMap(\.panes)
       let runningPids = allPanes.filter(\.isRunningTask).map(\.pid).filter { $0 > 0 }
 
       if !runningPids.isEmpty {

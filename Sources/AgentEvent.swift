@@ -38,6 +38,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
   let sessionID: String
   let turnID: String?
   let paneID: String
+  let transcriptPath: String?
   let cwd: String?
   let model: String?
   let permissionMode: String?
@@ -56,6 +57,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
     hookVersion: String? = nil,
     turnID: String? = nil,
     paneID: String,
+    transcriptPath: String? = nil,
     cwd: String? = nil,
     model: String? = nil,
     permissionMode: String? = nil,
@@ -74,6 +76,7 @@ struct AgentEvent: Codable, Hashable, Sendable {
     self.sessionID = sessionID
     self.turnID = turnID
     self.paneID = paneID
+    self.transcriptPath = transcriptPath
     self.cwd = cwd
     self.model = model
     self.permissionMode = permissionMode
@@ -156,6 +159,7 @@ enum AgentHookNormalizer {
       hookVersion: bounded(environment["TMUXVTAB_HOOK_VERSION"], maximumMetadataLength),
       turnID: bounded(payload["turn_id"] as? String, maximumMetadataLength),
       paneID: bounded(paneID, maximumMetadataLength) ?? paneID,
+      transcriptPath: bounded(payload["transcript_path"] as? String, 4_096),
       cwd: bounded(payload["cwd"] as? String, maximumMetadataLength),
       model: bounded(payload["model"] as? String, maximumMetadataLength),
       permissionMode: bounded(payload["permission_mode"] as? String, maximumMetadataLength),

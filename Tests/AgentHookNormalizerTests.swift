@@ -38,6 +38,7 @@ struct AgentHookNormalizerTests {
       {
         "session_id": "codex-session",
         "turn_id": "turn-42",
+        "transcript_path": "/tmp/codex-session.jsonl",
         "hook_event_name": "Stop",
         "last_assistant_message": "Implemented and tested"
       }
@@ -53,6 +54,7 @@ struct AgentHookNormalizerTests {
     #expect(event.source == .codex)
     #expect(event.kind == .completed)
     #expect(event.turnID == "turn-42")
+    #expect(event.transcriptPath == "/tmp/codex-session.jsonl")
     #expect(event.response == "Implemented and tested")
   }
 

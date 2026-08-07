@@ -79,10 +79,39 @@ struct AgentStateStoreTests {
     #expect(runtime.needsAttention)
   }
 
+  @Test func matchingRolloutCompletionClearsAStaleCodexTurn() throws {
+    let store = AgentStateStore(persistenceURL: nil)
+    store.apply(event(
+      .userPrompt,
+      turnID: "current-turn",
+      transcriptPath: "/tmp/current.jsonl",
+      prompt: "Finish this"
+    ))
+
+    store.markCodexTurnComplete(CodexTurnCompletion(
+      paneID: "%1",
+      turnID: "old-turn",
+      timestamp: Date(timeIntervalSince1970: 10)
+    ))
+    #expect(store.runtime(for: "%1")?.phase == .running)
+
+    store.markCodexTurnComplete(CodexTurnCompletion(
+      paneID: "%1",
+      turnID: "current-turn",
+      timestamp: Date(timeIntervalSince1970: 20)
+    ))
+    let runtime = try #require(store.runtime(for: "%1"))
+    #expect(runtime.phase == .complete)
+    #expect(runtime.activity == nil)
+    #expect(runtime.needsAttention)
+  }
+
   private func event(
     _ kind: AgentEventKind,
     sessionID: String = "session",
     paneID: String = "%1",
+    turnID: String? = nil,
+    transcriptPath: String? = nil,
     prompt: String? = nil,
     response: String? = nil,
     detail: String? = nil,
@@ -93,7 +122,9 @@ struct AgentStateStoreTests {
       kind: kind,
       sessionID: sessionID,
       hookVersion: hookVersion,
+      turnID: turnID,
       paneID: paneID,
+      transcriptPath: transcriptPath,
       prompt: prompt,
       response: response,
       detail: detail

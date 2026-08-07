@@ -60,6 +60,7 @@ final class AgentStateStore {
         permissionMode: event.permissionMode,
         sessionID: event.sessionID,
         turnID: event.turnID,
+        transcriptPath: event.transcriptPath,
         cwd: event.cwd,
         model: event.model,
         updatedAt: event.timestamp
@@ -69,6 +70,7 @@ final class AgentStateStore {
     runtime.permissionMode = event.permissionMode ?? runtime.permissionMode
     runtime.hookVersion = event.hookVersion ?? runtime.hookVersion
     runtime.turnID = event.turnID ?? runtime.turnID
+    runtime.transcriptPath = event.transcriptPath ?? runtime.transcriptPath
     runtime.cwd = event.cwd ?? runtime.cwd
     runtime.model = event.model ?? runtime.model
     runtime.updatedAt = event.timestamp
@@ -131,6 +133,41 @@ final class AgentStateStore {
     }
 
     runtimesByPane[event.paneID] = runtime
+    persist()
+  }
+
+  func runningCodexTurns(for panes: [TmuxPane]) -> [CodexTurnCompletionCandidate] {
+    var seenPaneIDs: Set<String> = []
+    return panes.compactMap { pane in
+      guard seenPaneIDs.insert(pane.id).inserted,
+            let runtime = runtime(for: pane.id),
+            runtime.source == .codex,
+            runtime.phase == .running,
+            let turnID = runtime.turnID,
+            let transcriptPath = runtime.transcriptPath
+      else { return nil }
+
+      return CodexTurnCompletionCandidate(
+        paneID: pane.id,
+        turnID: turnID,
+        transcriptPath: transcriptPath
+      )
+    }
+  }
+
+  func markCodexTurnComplete(_ completion: CodexTurnCompletion) {
+    guard var runtime = runtimesByPane[completion.paneID],
+          runtime.source == .codex,
+          runtime.phase == .running,
+          runtime.turnID == completion.turnID
+    else { return }
+
+    runtime.phase = .complete
+    runtime.activity = nil
+    runtime.approval = nil
+    runtime.needsAttention = true
+    runtime.updatedAt = max(runtime.updatedAt, completion.timestamp)
+    runtimesByPane[completion.paneID] = runtime
     persist()
   }
 

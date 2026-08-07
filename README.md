@@ -55,7 +55,10 @@ bin/tmuxvtab start    # starts using locally built binary
 TmuxVTab includes its own local hook transport. Short-lived hooks normalize
 Claude Code and Codex events and send bounded previews to the running app over
 a user-private Unix socket. There is no token, pairing step, cloud service,
-transcript scraping, or separately downloaded hook binary.
+or separately downloaded hook binary. Preview text comes only from hook
+payloads. If Codex misses a Stop hook, TmuxVTab reads only a bounded rollout
+tail for matching `turn_id` and `task_complete` metadata; it does not read
+prompt or response content from the rollout.
 
 ### Register the TmuxVTab Claude Code plugin
 
