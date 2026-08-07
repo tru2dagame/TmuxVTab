@@ -6,6 +6,7 @@ final class TmuxService {
   var sessions: [TmuxSession] = []
   var isConnected = false
   var error: String?
+  var previewLineLimit = PreviewLineLimit.defaultValue
 
   private var pollingTask: Task<Void, Never>?
   private let tmuxPath: String?
@@ -55,7 +56,9 @@ final class TmuxService {
 
     do {
       log("Refreshing sessions...")
+      async let configuredPreviewLineLimit = fetchPreviewLineLimit(tmuxPath: tmuxPath)
       var newSessions = try await fetchSessions(tmuxPath: tmuxPath)
+      let newPreviewLineLimit = await configuredPreviewLineLimit
       log("Got \(newSessions.count) sessions")
 
       // Merge structured local hook state by tmux pane id. This is independent
@@ -84,6 +87,7 @@ final class TmuxService {
       }
 
       sessions = newSessions
+      previewLineLimit = newPreviewLineLimit
       isConnected = true
       error = nil
     } catch {
@@ -143,6 +147,14 @@ final class TmuxService {
   }
 
   // MARK: - Tmux Fetching
+
+  private func fetchPreviewLineLimit(tmuxPath: String) async -> Int {
+    let rawValue = try? await run(
+      tmuxPath,
+      arguments: ["show-option", "-gqv", "@tmuxvtab-preview-lines"]
+    )
+    return PreviewLineLimit.parse(rawValue)
+  }
 
   private func fetchSessions(tmuxPath: String) async throws -> [TmuxSession] {
     let sessionOutput = try await run(

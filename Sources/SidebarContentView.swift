@@ -24,6 +24,7 @@ struct SidebarContentView: View {
       footer
     }
     .environment(\.sidebarFontScale, fontScale)
+    .environment(\.agentPreviewLineLimit, tmuxService.previewLineLimit)
     .background(Color.black.opacity(0.88))
     .background(.ultraThinMaterial)
     .preferredColorScheme(.dark)

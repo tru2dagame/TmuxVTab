@@ -4,6 +4,7 @@ struct WindowRowView: View {
   let window: TmuxWindow
   let onSelect: () -> Void
   @Environment(\.sidebarFontScale) private var fontScale
+  @Environment(\.agentPreviewLineLimit) private var agentPreviewLineLimit
   @State private var isHovering = false
 
   /// Agent inferred from the hook plugin if available, falling back to ps-walk detection.
@@ -174,7 +175,7 @@ struct WindowRowView: View {
     _ text: String,
     marker: String,
     color: Color,
-    lineLimit: Int = 2
+    lineLimit: Int? = nil
   ) -> some View {
     HStack(alignment: .top, spacing: 4) {
       Text(marker)
@@ -185,7 +186,7 @@ struct WindowRowView: View {
       Text(text)
         .scaledFont(size: 10, design: .monospaced)
         .foregroundStyle(window.isActive ? ThemeColor.textActive : ThemeColor.textInactive)
-        .lineLimit(lineLimit)
+        .lineLimit(lineLimit ?? agentPreviewLineLimit)
         .truncationMode(.tail)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)

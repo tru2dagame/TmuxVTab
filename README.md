@@ -22,9 +22,15 @@ Add to your `~/.tmux.conf` or `~/.tmux.conf.local`:
 
 ```bash
 set -g @plugin 'tru2dagame/TmuxVTab'
+
+# Optional: prompt, approval, and response preview lines (default: 3, range: 1-8)
+set -g @tmuxvtab-preview-lines 5
 ```
 
 Then press `prefix + I` to install. TmuxVTab will automatically download the pre-built binary from GitHub Releases and start.
+The preview setting is picked up automatically within the next refresh cycle;
+tmux does not need to be restarted. Activity status stays on one line so normal
+running updates do not make each window row too tall.
 
 ### Manual
 
