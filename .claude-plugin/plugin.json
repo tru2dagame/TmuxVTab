@@ -1,12 +1,13 @@
 {
   "name": "tmuxvtab",
-  "version": "0.1.0",
-  "description": "Surface Claude Code agent state into @pane_* tmux options for the TmuxVTab macOS sidebar",
+  "version": "0.3.1",
+  "description": "Show local Claude Code prompts, progress, approvals, and results in the TmuxVTab macOS sidebar",
   "author": {
     "name": "Tru",
     "url": "https://github.com/tru2dagame"
   },
   "repository": "https://github.com/tru2dagame/tmuxvtab",
   "license": "MIT",
-  "keywords": ["tmux", "ghostty", "agent", "sidebar", "claude-code"]
+  "keywords": ["tmux", "ghostty", "agent", "sidebar", "claude-code"],
+  "hooks": "./hooks/claude-extra-hooks.json"
 }

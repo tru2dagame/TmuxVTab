@@ -1,37 +1,56 @@
-#!/usr/bin/env bash
-# tmuxvtab Claude Code plugin hook shim.
-#
-# Each hook event in hooks/hooks.json calls this script. We delegate to
-# the `tmux-agent-sidebar` binary (hiroppy/tmux-agent-sidebar), which is
-# the implementation that writes the @pane_* tmux options TmuxVTab.app
-# reads on its 3-second poll. Keeping the binary as a separate concern
-# lets us swap it for a tmuxvtab-native helper later without touching
-# anyone's Claude Code settings.
-#
-# Silent exit 0 when the binary cannot be found, so Claude sessions
-# never surface a hook failure on machines without the sidebar binary
-# installed.
+#!/bin/bash
+# Fast, fail-open adapter for Claude Code and Codex lifecycle hooks.
+# The TmuxVTab executable normalizes stdin and writes one bounded event to the
+# private Unix socket owned by the running TmuxVTab app.
 
-PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-# TmuxVTab TPM-install path — the wrapper script there auto-downloads the
-# binary on `tmuxvtab start`, so a single `set -g @plugin 'tru2dagame/TmuxVTab'`
-# is enough to get hooks working end-to-end.
-TMUXVTAB_TPM_DIR="$HOME/.tmux/plugins/TmuxVTab"
-# Standalone tmux-agent-sidebar TPM plugin path — used when the user also
-# installed it directly via `set -g @plugin 'tru2dagame/tmux-agent-sidebar'`.
-SIDEBAR_TPM_DIR="$HOME/.tmux/plugins/tmux-agent-sidebar"
+AGENT="${1:-auto}"
+EVENT="${2:-}"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if [[ "$SCRIPT_PATH" != /* ]]; then
+  SCRIPT_PATH="$PWD/$SCRIPT_PATH"
+fi
+PLUGIN_DIR="${SCRIPT_PATH%/*}"
+PLUGIN_DIR="$(cd "$PLUGIN_DIR" && pwd -P)" || exit 0
+HOOK_VERSION_FILE="$PLUGIN_DIR/hooks/VERSION"
+HOOK_VERSION="unknown"
+if [[ -f "$HOOK_VERSION_FILE" ]]; then
+  IFS= read -r HOOK_VERSION < "$HOOK_VERSION_FILE" || true
+  HOOK_VERSION="${HOOK_VERSION#"${HOOK_VERSION%%[![:space:]]*}"}"
+  HOOK_VERSION="${HOOK_VERSION%"${HOOK_VERSION##*[![:space:]]}"}"
+fi
 
-if [ -x "$PLUGIN_DIR/bin/tmux-agent-sidebar" ]; then
-  BIN="$PLUGIN_DIR/bin/tmux-agent-sidebar"
-elif [ -x "$TMUXVTAB_TPM_DIR/bin/tmux-agent-sidebar" ]; then
-  BIN="$TMUXVTAB_TPM_DIR/bin/tmux-agent-sidebar"
-elif [ -x "$SIDEBAR_TPM_DIR/bin/tmux-agent-sidebar" ]; then
-  BIN="$SIDEBAR_TPM_DIR/bin/tmux-agent-sidebar"
-elif [ -x "$SIDEBAR_TPM_DIR/target/release/tmux-agent-sidebar" ]; then
-  BIN="$SIDEBAR_TPM_DIR/target/release/tmux-agent-sidebar"
-elif command -v tmux-agent-sidebar &>/dev/null; then
-  BIN="tmux-agent-sidebar"
-else
+if [[ "$AGENT" == "--version" || "$AGENT" == "version" ]]; then
+  printf '%s\n' "$HOOK_VERSION"
   exit 0
 fi
-exec "$BIN" hook "$@"
+
+export TMUXVTAB_HOOK_VERSION="$HOOK_VERSION"
+TMUXVTAB_TPM_DIR="$HOME/.tmux/plugins/TmuxVTab"
+TMUXVTAB_TPM_DIR_LOWER="$HOME/.tmux/plugins/tmuxvtab"
+PUBLISHED_BIN="$HOME/Library/Application Support/TmuxVTab/TmuxVTab-hook"
+
+if [[ -n "${TMUXVTAB_BINARY:-}" && -x "$TMUXVTAB_BINARY" ]]; then
+  BIN="$TMUXVTAB_BINARY"
+elif [[ -x "$PUBLISHED_BIN" ]]; then
+  BIN="$PUBLISHED_BIN"
+elif [[ -x "$PLUGIN_DIR/.build/debug/TmuxVTab" ]]; then
+  BIN="$PLUGIN_DIR/.build/debug/TmuxVTab"
+elif [[ -x "$PLUGIN_DIR/.build/release/TmuxVTab" ]]; then
+  BIN="$PLUGIN_DIR/.build/release/TmuxVTab"
+elif [[ -x "$TMUXVTAB_TPM_DIR/.build/release/TmuxVTab" ]]; then
+  BIN="$TMUXVTAB_TPM_DIR/.build/release/TmuxVTab"
+elif [[ -x "$TMUXVTAB_TPM_DIR_LOWER/.build/release/TmuxVTab" ]]; then
+  BIN="$TMUXVTAB_TPM_DIR_LOWER/.build/release/TmuxVTab"
+elif command -v TmuxVTab >/dev/null 2>&1; then
+  BIN="$(command -v TmuxVTab)"
+elif command -v tmuxvtab >/dev/null 2>&1; then
+  exec "$(command -v tmuxvtab)" hook "$AGENT" "$EVENT"
+else
+  # Current Codex Stop/SubagentStop hooks expect JSON even for a no-op.
+  case "$EVENT" in
+    stop|subagent-stop) printf '{}\n' ;;
+  esac
+  exit 0
+fi
+
+exec "$BIN" hook "$AGENT" "$EVENT"

@@ -1,0 +1,21 @@
+{
+  "name": "tmuxvtab",
+  "version": "0.3.1",
+  "description": "Show local Codex prompts, progress, approvals, and results in the TmuxVTab macOS sidebar",
+  "author": {
+    "name": "Tru",
+    "url": "https://github.com/tru2dagame"
+  },
+  "repository": "https://github.com/tru2dagame/tmuxvtab",
+  "license": "MIT",
+  "keywords": ["tmux", "ghostty", "agent", "sidebar", "codex"],
+  "interface": {
+    "displayName": "TmuxVTab",
+    "shortDescription": "Local Claude and Codex previews for tmux",
+    "longDescription": "Send bounded lifecycle previews over a private local Unix socket to the TmuxVTab sidebar.",
+    "developerName": "Tru",
+    "category": "Developer Tools",
+    "capabilities": ["Hooks"],
+    "defaultPrompt": ["Show the Claude and Codex activity in my tmux sidebar."]
+  }
+}
