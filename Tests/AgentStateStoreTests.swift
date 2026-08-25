@@ -67,6 +67,23 @@ struct AgentStateStoreTests {
     #expect(selected.runtime.question == "Keep working")
   }
 
+  @Test func removesPersistedStateWithoutAMatchingLiveAgent() {
+    let store = AgentStateStore(persistenceURL: nil)
+    store.apply(event(.userPrompt, sessionID: "stale", paneID: "%shell"))
+    store.apply(event(.userPrompt, sessionID: "live", paneID: "%codex"))
+    store.apply(event(.userPrompt, sessionID: "gone", paneID: "%missing"))
+
+    let panes = [
+      TmuxPane(id: "%shell", pid: 10, currentCommand: "zsh", isActive: true),
+      TmuxPane(id: "%codex", pid: 11, currentCommand: "codex", isActive: false),
+    ]
+    store.reconcile(panes: panes, detectedAgentsByPID: [11: .codex])
+
+    #expect(store.runtime(for: "%shell") == nil)
+    #expect(store.runtime(for: "%missing") == nil)
+    #expect(store.runtime(for: "%codex")?.sessionID == "live")
+  }
+
   @Test func idleEventClearsAStaleWorkingPhase() throws {
     let store = AgentStateStore(persistenceURL: nil)
     store.apply(event(.userPrompt, prompt: "Do the work"))

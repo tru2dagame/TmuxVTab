@@ -36,6 +36,26 @@ final class AgentStateStore {
     }
   }
 
+  /// Drops hook state that no longer has a matching live agent process.
+  /// Pane IDs can be reused after a tmux server restart, so persisted state
+  /// alone is not sufficient proof that the agent still belongs to that pane.
+  func reconcile(
+    panes: [TmuxPane],
+    detectedAgentsByPID: [Int: DetectedAgent]
+  ) {
+    let panesByID = Dictionary(panes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let stalePaneIDs = runtimesByPane.compactMap { paneID, runtime -> String? in
+      guard let pane = panesByID[paneID] else { return paneID }
+      return detectedAgentsByPID[pane.pid] == runtime.detectedAgent ? nil : paneID
+    }
+    guard !stalePaneIDs.isEmpty else { return }
+
+    for paneID in stalePaneIDs {
+      runtimesByPane.removeValue(forKey: paneID)
+    }
+    persist()
+  }
+
   func apply(_ event: AgentEvent) {
     guard event.version == AgentEvent.protocolVersion, !event.paneID.isEmpty else { return }
 

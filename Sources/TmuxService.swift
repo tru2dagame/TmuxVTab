@@ -61,9 +61,19 @@ final class TmuxService {
       let newPreviewLineLimit = await configuredPreviewLineLimit
       log("Got \(newSessions.count) sessions")
 
+      let allPanes = newSessions.flatMap(\.windows).flatMap(\.panes)
+      let panePids = allPanes.map(\.pid).filter { $0 > 0 }
+      let detectedAgents = await detectAgents(for: panePids)
+
+      // Hook state is persisted across app and tmux restarts, while tmux pane
+      // IDs are not. Reconcile it against the live process tree before it can
+      // override the current pane command.
+      if let detectedAgents {
+        agentStore.reconcile(panes: allPanes, detectedAgentsByPID: detectedAgents)
+      }
+
       // Codex normally sends Stop. If a turn misses that hook, reconcile only
       // the matching task_complete metadata from the bounded rollout tail.
-      let allPanes = newSessions.flatMap(\.windows).flatMap(\.panes)
       let completionCandidates = agentStore.runningCodexTurns(for: allPanes)
       let completions = await CodexTurnCompletionDetector.detect(completionCandidates)
       for completion in completions {
@@ -86,10 +96,7 @@ final class TmuxService {
 
       // Detect agents in every pane (one ps call for all), not only the active
       // pane represented by tmux's list-windows format.
-      let runningPids = allPanes.filter(\.isRunningTask).map(\.pid).filter { $0 > 0 }
-
-      if !runningPids.isEmpty {
-        let agentMap = await detectAgents(for: runningPids)
+      if let agentMap = detectedAgents {
         for i in newSessions.indices {
           for j in newSessions[i].windows.indices {
             let window = newSessions[i].windows[j]
@@ -269,9 +276,9 @@ final class TmuxService {
 
   /// Detects known coding agents by walking the process tree from each pane PID.
   /// Does a single `ps` call and checks all PIDs at once.
-  private func detectAgents(for panePids: [Int]) async -> [Int: DetectedAgent] {
+  private func detectAgents(for panePids: [Int]) async -> [Int: DetectedAgent]? {
     guard let psOutput = try? await run("/bin/ps", arguments: ["-eo", "pid,ppid,args"]) else {
-      return [:]
+      return nil
     }
 
     // Parse ps output into (pid, ppid, args) tuples
